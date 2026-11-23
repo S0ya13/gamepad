@@ -19,6 +19,19 @@ A → Space, B → F, X → R, Y → E, D-pad ↑↓←→ → 1/2/3/4 (edit `CG
 
 All keys are released after 250 ms without packets and on Ctrl+C.
 
+### Analog virtual gamepad (OpenJoystickDriver)
+
+Keyboard emulation turns the left stick into on/off W/A/S/D. For real analog sticks, install
+[OpenJoystickDriver](https://github.com/xsyetopz/OpenJoystickDriver) (it holds Apple's virtual-HID entitlement),
+link its CLI as `ojd` on `PATH`, allow it in Input Monitoring and Accessibility, then:
+
+```sh
+swift run -c release MacServer --ojd sdl   # Steam, SDL games, emulators (Xbox-style pad)
+swift run -c release MacServer --ojd gc    # games using Apple GameController
+```
+
+A/B/X/Y → South/East/West/North, L3 → left stick click.
+
 ## iOS client
 
 ```sh

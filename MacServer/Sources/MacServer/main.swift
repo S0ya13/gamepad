@@ -3,8 +3,10 @@ import Network
 import SharedProtocol
 
 let usage = """
-usage: MacServer [--debug] [--port N] [--sens PX]
+usage: MacServer [--debug | --ojd sdl|gc|generic] [--port N] [--sens PX]
   --debug     print gamepad state instead of emulating keyboard/mouse
+  --ojd KIND  analog virtual gamepad via OpenJoystickDriver ('ojd' on PATH):
+              sdl = Steam/SDL games (Xbox-style), gc = Apple GameController games, generic = plain HID
   --port N    UDP port (default \(GamepadPacket.defaultPort))
   --sens PX   mouse pixels per tick (120 Hz) at full right-stick deflection (default 15)
 """
@@ -16,11 +18,15 @@ func fail(_ message: String) -> Never {
 
 var port = GamepadPacket.defaultPort
 var debug = false
+var ojdProfile: String?
 var sensitivity = 15.0
 var args = CommandLine.arguments.dropFirst().makeIterator()
 while let arg = args.next() {
     switch arg {
     case "--debug": debug = true
+    case "--ojd":
+        guard let v = args.next(), let profile = OJDBackend.profiles[v] else { fail("--ojd needs sdl, gc or generic") }
+        ojdProfile = profile
     case "--port":
         guard let v = args.next(), let p = UInt16(v), p > 0 else { fail("--port needs 1...65535") }
         port = p
@@ -32,7 +38,9 @@ while let arg = args.next() {
     }
 }
 
-let backend: InputBackend = debug ? DebugBackend() : CGEventBackend(sensitivity: sensitivity)
+if debug && ojdProfile != nil { fail("--debug and --ojd are exclusive") }
+let backend: InputBackend = debug ? DebugBackend()
+    : ojdProfile.map { OJDBackend(profile: $0) } ?? CGEventBackend(sensitivity: sensitivity)
 
 // MARK: - Watchdog: release everything if the client goes silent (heartbeat is 50 ms).
 
@@ -108,7 +116,8 @@ listener.stateUpdateHandler = { state in
     switch state {
     case .ready:
         print("listening on UDP \(port) — enter one of these IPs on the iPhone: \(localIPv4().joined(separator: ", "))")
-        print(debug ? "mode: debug" : "mode: keyboard/mouse (sens \(sensitivity))")
+        print(debug ? "mode: debug" : ojdProfile.map { "mode: virtual gamepad via OpenJoystickDriver (\($0))" }
+            ?? "mode: keyboard/mouse (sens \(sensitivity))")
     case .failed(let error):
         fail("listener failed: \(error)")
     default:

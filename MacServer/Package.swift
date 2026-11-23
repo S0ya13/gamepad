@@ -10,5 +10,6 @@ let package = Package(
             name: "MacServer",
             dependencies: [.product(name: "SharedProtocol", package: "SharedProtocol")]
         ),
+        .testTarget(name: "MacServerTests", dependencies: ["MacServer"]),
     ]
 )
