@@ -63,7 +63,8 @@ sigint.resume()
 
 // MARK: - UDP listener
 
-// shortcut: one client at a time — the newest sender wins; two phones sending at once will fight.
+// One client at a time: a second sender is ignored until the current one goes silent (watchdog),
+// otherwise two senders would flip the state (and the keys) on every packet.
 var active: NWConnection?
 
 func receive(on conn: NWConnection, lastSeq: UInt32?) {
@@ -89,8 +90,15 @@ do {
 
 listener.newConnectionHandler = { conn in
     // A restarted app gets a new source port -> new connection -> fresh sequence tracking.
+    guard active == nil || released else {
+        conn.cancel()
+        return
+    }
     active?.cancel()
     active = conn
+    // Claim the slot now, before its first packet is read, so a second sender can't race in.
+    released = false
+    lastPacketAt = DispatchTime.now().uptimeNanoseconds
     if debug { print("\nclient: \(conn.endpoint)") }
     conn.start(queue: .main)
     receive(on: conn, lastSeq: nil)
