@@ -32,7 +32,8 @@ public final class OJDBackend: InputBackend {
         process.standardOutput = FileHandle.nullDevice  // rumble commands from games; not used
         process.terminationHandler = { [weak self] p in
             DispatchQueue.main.async {
-                guard self?.stopping != true else { return }
+                // No self: the backend was released (mode switch, quit) and deinit killed ojd on purpose.
+                guard let self, !self.stopping else { return }
                 onFailure("ojd virtual feed exited (\(p.terminationStatus)). Is OpenJoystickDriver running, with Input Monitoring allowed? Try: ojd status")
             }
         }

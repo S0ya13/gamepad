@@ -59,6 +59,12 @@ final class AppModel: ObservableObject {
         } catch {
             problem = "Can't start: \(error.localizedDescription)"
         }
+        // The grant happens in System Settings while the menu may stay open; pick it up without a relaunch.
+        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] timer in
+            guard let self else { return timer.invalidate() }
+            self.refreshAccessibility()
+            if self.hasAccessibility { timer.invalidate() }
+        }
     }
 
     /// Makes a new key: every paired phone must scan the new QR code.
@@ -73,7 +79,8 @@ final class AppModel: ObservableObject {
     }
 
     func refreshAccessibility(prompt: Bool = false) {
-        hasAccessibility = CGEventBackend.hasAccessibility(prompt: prompt)
+        let granted = CGEventBackend.hasAccessibility(prompt: prompt)
+        if granted != hasAccessibility { hasAccessibility = granted }
     }
 
     var launchAtLogin: Bool {

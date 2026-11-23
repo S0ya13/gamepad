@@ -3,6 +3,19 @@ import XCTest
 @testable import GamepadServerKit
 
 final class OJDFrameTests: XCTestCase {
+    /// Switching modes releases the backend; ojd killed on purpose must not show up as an error.
+    func testReleasingBackendIsNotAFailure() throws {
+        try XCTSkipIf(OJDBackend.ojdPath() == nil, "ojd not installed")
+        var failure: String?
+        var backend: OJDBackend? = OJDBackend(profile: "generic") { failure = $0 }
+        RunLoop.main.run(until: Date() + 0.3)
+        XCTAssertNil(failure, "ojd didn't start")
+        backend = nil
+        RunLoop.main.run(until: Date() + 0.5)
+        XCTAssertNil(failure)
+        _ = backend
+    }
+
     func testNeutralFrame() {
         XCTAssertEqual(OJDBackend.frame(for: GamepadPacket()),
                        #"{"buttons":[],"dpad":[],"axes":{"LeftStickX":0.0000,"LeftStickY":-0.0000,"RightStickX":0.0000,"RightStickY":-0.0000}}"#)
