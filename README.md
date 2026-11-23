@@ -11,6 +11,12 @@ swift run -c release MacServer                # keyboard + mouse emulation
 swift run -c release MacServer --port 47900 --sens 15
 ```
 
+On first run the server prints a QR code. Scan it with the iPhone Camera and open the link in Gamepad.
+The phone then finds the Mac by name over Bonjour (falls back to the IP in the QR code) and signs every
+packet with the shared key; the server ignores anything unsigned. `--pair` shows the QR code again,
+`--new-key` makes a new key and unpairs every phone. The key lives in
+`~/Library/Application Support/GamepadServer/pairing.key`.
+
 Keyboard/mouse mode needs Accessibility permission for the app you run it from
 (System Settings → Privacy & Security → Accessibility). Allow incoming connections if the firewall asks.
 
@@ -46,7 +52,7 @@ once, so it survives `xcodegen` regeneration:
 DEVELOPMENT_TEAM = ABCDE12345
 ```
 
-Enter the Mac IP printed by the server in the field at the bottom center. Allow Local Network access on first launch.
+Pair by scanning the server's QR code with the Camera (see above). Allow Local Network access on first launch.
 
 Layout (landscape): top 40% are buttons (left 2×2: ◀ ▲ / ▼ ▶, right 2×2: X Y / A B),
 bottom 60% are floating sticks. Pushing the left stick past 88% of its radius holds L3 (sprint).

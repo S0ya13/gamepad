@@ -1,10 +1,15 @@
-/// Wire format (14 bytes, little-endian, no padding):
+import Foundation
+
+/// Payload (14 bytes, little-endian, no padding):
 /// offset 0  UInt16 buttons
 /// offset 2  Int16  lx   (right +)
 /// offset 4  Int16  ly   (up +)
 /// offset 6  Int16  rx   (right +)
 /// offset 8  Int16  ry   (up +)
 /// offset 10 UInt32 seq  (wraps around)
+///
+/// On the wire (`sealed`, 23 bytes): UInt8 version (2) + payload + first 8 bytes of
+/// HMAC-SHA256(pairing key, version + payload).
 public struct GamepadPacket: Equatable, Sendable {
     public struct Buttons: OptionSet, Hashable, Sendable {
         public let rawValue: UInt16
@@ -75,5 +80,15 @@ public struct GamepadPacket: Equatable, Sendable {
     /// Wrap-around-safe "seq came after last" (RFC 1982 style).
     public static func isNewer(_ seq: UInt32, than last: UInt32) -> Bool {
         Int32(bitPattern: seq &- last) > 0
+    }
+
+    /// Next sequence number: +1, but never behind the clock in milliseconds. A relaunched app then
+    /// continues above its previous run, so the server can keep one `lastSeq` and reject replays.
+    public static func nextSeq(after last: UInt32, nowMilliseconds now: UInt32) -> UInt32 {
+        isNewer(now, than: last) ? now : last &+ 1
+    }
+
+    public static func nowMilliseconds() -> UInt32 {
+        UInt32(truncatingIfNeeded: UInt64(Date().timeIntervalSince1970 * 1000))
     }
 }

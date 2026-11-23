@@ -1,10 +1,10 @@
+import SharedProtocol
 import UIKit
 
-final class GamepadViewController: UIViewController, UITextFieldDelegate {
-    private static let ipKey = "macIP"
+final class GamepadViewController: UIViewController {
+    private static let pairingKey = "pairing"
 
     private let pad = GamepadView()
-    private let ipField = UITextField()
     private let statusLabel = UILabel()
     private let udp = UDPClient()
 
@@ -14,53 +14,44 @@ final class GamepadViewController: UIViewController, UITextFieldDelegate {
         super.viewDidLoad()
         overrideUserInterfaceStyle = .dark
 
-        ipField.text = UserDefaults.standard.string(forKey: Self.ipKey)
-        ipField.placeholder = "Mac IP"
-        ipField.borderStyle = .roundedRect
-        ipField.backgroundColor = UIColor(white: 0.12, alpha: 1)
-        ipField.textAlignment = .center
-        ipField.font = .monospacedDigitSystemFont(ofSize: 14, weight: .regular)
-        ipField.keyboardType = .numbersAndPunctuation
-        ipField.returnKeyType = .done
-        ipField.autocorrectionType = .no
-        ipField.autocapitalizationType = .none
-        ipField.delegate = self
-
         statusLabel.font = .systemFont(ofSize: 11)
         statusLabel.textColor = UIColor(white: 1, alpha: 0.5)
         statusLabel.textAlignment = .center
+        statusLabel.numberOfLines = 2
         statusLabel.backgroundColor = .black  // hides the stick divider behind the text
-        statusLabel.text = ipField.text?.isEmpty == false ? "connecting…" : "enter the Mac's IP"
-
+        statusLabel.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(statusLabel)
         // Bottom center, on the border between the two floating sticks.
-        let stack = UIStackView(arrangedSubviews: [statusLabel, ipField])
-        stack.axis = .vertical
-        stack.spacing = 4
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            stack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -6),
-            ipField.widthAnchor.constraint(equalToConstant: 150),
+            statusLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            statusLabel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -6),
+            statusLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 260),
         ])
 
         pad.onChange = { [udp] packet in udp.send(packet) }
         udp.onStatus = { [weak self] text in self?.statusLabel.text = text }
-        if let ip = ipField.text, !ip.isEmpty { udp.connect(host: ip) }
+        NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil,
+                                               queue: .main) { [udp] _ in udp.resume() }
+
+        // shortcut: the key sits in UserDefaults (app sandbox), not the Keychain; move it if the app is ever shared.
+        if let data = UserDefaults.standard.data(forKey: Self.pairingKey),
+           let pairing = try? JSONDecoder().decode(Pairing.self, from: data) {
+            statusLabel.text = "connecting to \(pairing.name)…"
+            udp.connect(pairing)
+        } else {
+            statusLabel.text = "Not paired. Run MacServer --pair on the Mac\nand scan the QR code with the Camera."
+        }
     }
 
-    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-        textField.resignFirstResponder()
-        return true
-    }
-
-    func textFieldDidEndEditing(_ textField: UITextField) {
-        let ip = (textField.text ?? "").trimmingCharacters(in: .whitespaces)
-        textField.text = ip
-        guard !ip.isEmpty else { return }
-        UserDefaults.standard.set(ip, forKey: Self.ipKey)
-        statusLabel.text = "connecting…"
-        udp.connect(host: ip)
+    /// A `gamepad-pair://` link from the Mac's QR code.
+    func pair(with url: URL) {
+        guard let pairing = Pairing(url: url) else {
+            statusLabel.text = "This is not a valid pairing link."
+            return
+        }
+        UserDefaults.standard.set(try? JSONEncoder().encode(pairing), forKey: Self.pairingKey)
+        statusLabel.text = "paired with \(pairing.name), connecting…"
+        udp.connect(pairing)
     }
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .landscape }
