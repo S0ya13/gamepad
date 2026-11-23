@@ -49,6 +49,9 @@ swift run -c release MacServer --ojd sdl   # Steam, SDL games, emulators (Xbox-s
 swift run -c release MacServer --ojd gc    # games using Apple GameController
 ```
 
+Browsers (Gamepad API, e.g. gpadtester.net) and other GameController apps see only the `gc` pad;
+Steam and SDL games read the `sdl` pad themselves.
+
 A/B/X/Y → South/East/West/North, LB/RB → shoulders, LT/RT → analog triggers, Start/Back, L3/R3 → stick clicks.
 The game's rumble goes back to the phone's Taptic Engine (heavy motor → strength, light motor → sharpness);
 the phone's *Vibration* switch turns it off.
