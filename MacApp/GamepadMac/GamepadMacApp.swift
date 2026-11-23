@@ -44,7 +44,7 @@ struct MenuView: View {
             case .keyboard:
                 if !model.hasAccessibility {
                     HStack {
-                        Label("Needs Accessibility to press keys", systemImage: "lock.fill")
+                        Label("Needs Device Control access to press keys", systemImage: "lock.fill")
                             .font(.callout).foregroundStyle(.orange)
                         Button("Allow…") { model.refreshAccessibility(prompt: true) }
                     }

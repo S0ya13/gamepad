@@ -10,7 +10,7 @@ scripts/install_mac_app.sh   # builds, installs /Applications/Gamepad.app and st
 
 The gamepad icon in the menu bar shows whether the iPhone is connected and holds everything else:
 the pairing QR code, the mode (keyboard & mouse, or an analog gamepad through OpenJoystickDriver for
-Steam/SDL or Apple GameController games), mouse speed, Accessibility status and launch at login.
+Steam/SDL or Apple GameController games), mouse speed, key-press permission status and launch at login.
 The app and the command-line server use the same port and pairing key; run one at a time.
 
 ## Mac server (command line)
@@ -28,8 +28,8 @@ packet with the shared key; the server ignores anything unsigned. `--pair` shows
 `--new-key` makes a new key and unpairs every phone. The key lives in
 `~/Library/Application Support/GamepadServer/pairing.key`.
 
-Keyboard/mouse mode needs Accessibility permission for the app you run it from
-(System Settings → Privacy & Security → Accessibility). Allow incoming connections if the firewall asks.
+Keyboard/mouse mode needs permission to press keys for the app you run it from
+(System Settings → Privacy & Security → Device Control and Data Access; Accessibility before macOS 27). Allow incoming connections if the firewall asks.
 
 Mapping: left stick → W/A/S/D, L3 → Shift, right stick → mouse,
 A → Space, B → F, X → R, Y → E, D-pad ↑↓←→ → 1/2/3/4 (edit `CGEventBackend.buttonKeys`).
@@ -40,7 +40,7 @@ All keys are released after 250 ms without packets and on Ctrl+C.
 
 Keyboard emulation turns the left stick into on/off W/A/S/D. For real analog sticks, install
 [OpenJoystickDriver](https://github.com/xsyetopz/OpenJoystickDriver) (it holds Apple's virtual-HID entitlement),
-link its CLI as `ojd` on `PATH`, allow it in Input Monitoring and Accessibility, then:
+link its CLI as `ojd` on `PATH`, allow it in Input Monitoring and Device Control and Data Access, then:
 
 ```sh
 swift run -c release MacServer --ojd sdl   # Steam, SDL games, emulators (Xbox-style pad)

@@ -59,8 +59,9 @@ do {
 
 if !debug && ojdProfile == nil && !CGEventBackend.hasAccessibility(prompt: true) {
     print("""
-    No Accessibility permission.
-    System Settings → Privacy & Security → Accessibility → enable the app you run this from
+    No permission to press keys.
+    System Settings → Privacy & Security → Device Control and Data Access
+    (Accessibility before macOS 27) → enable the app you run this from
     (Terminal / iTerm / your IDE), then restart it. Use --debug or --ojd to run without it.
     """)
     exit(1)

@@ -39,7 +39,7 @@ public final class CGEventBackend: InputBackend {
 
     deinit { timer.cancel() }
 
-    /// `prompt` shows the system dialog that leads to Privacy & Security → Accessibility.
+    /// `prompt` shows the system dialog that leads to Privacy & Security → Device Control and Data Access (Accessibility before macOS 27).
     public static func hasAccessibility(prompt: Bool) -> Bool {
         AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue(): prompt] as CFDictionary)
     }
