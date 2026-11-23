@@ -82,8 +82,11 @@ final class GamepadViewController: UIViewController {
         pad.haptics = s.haptics
 
         let profile = store.profile
-        if pad.engine.layout != profile.controls {
+        if pad.engine.layout != profile.controls || pad.engine.leftSetup != profile.leftStick
+            || pad.engine.rightSetup != profile.rightStick {
             pad.engine.layout = profile.controls
+            pad.engine.leftSetup = profile.leftStick
+            pad.engine.rightSetup = profile.rightStick
             pad.setNeedsDisplay()
         }
         udp.keyMap = profile.keys

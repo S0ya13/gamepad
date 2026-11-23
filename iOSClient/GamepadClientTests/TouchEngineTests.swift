@@ -1,5 +1,6 @@
 import SharedProtocol
 import XCTest
+import UIKit
 @testable import GamepadClient
 
 final class TouchEngineTests: XCTestCase {
@@ -159,5 +160,64 @@ final class TouchEngineTests: XCTestCase {
         XCTAssertEqual(engine.packet.lx, 0)
         engine.ended(id(b))
         XCTAssertNotNil(engine.left)
+    }
+
+    func testFixedStickCentersOnItsSpotAndIgnoresFarTouches() {
+        engine.leftSetup = Profile.StickSetup(mode: .fixed, center: CGPoint(x: 0.25, y: 0.75))  // (200, 300)
+        XCTAssertFalse(engine.began(id(a), at: CGPoint(x: 0, y: 399)), "more than 2 radii away")
+        XCTAssertNil(engine.left)
+        _ = engine.began(id(b), at: CGPoint(x: 250, y: 300))  // lands half a radius right of the base
+        XCTAssertEqual(engine.left?.center, CGPoint(x: 200, y: 300))
+        XCTAssertEqual(GamepadPacket.unit(engine.packet.lx), 0.5, accuracy: 1e-3)
+    }
+
+    func testDynamicStickBaseFollowsFinger() {
+        engine.rightSetup.mode = .dynamic
+        _ = engine.began(id(a), at: CGPoint(x: 500, y: 300))
+        _ = engine.moved(id(a), to: CGPoint(x: 750, y: 300))  // 2.5 radii right
+        XCTAssertEqual(engine.right?.center, CGPoint(x: 650, y: 300), "dragged to one radius behind")
+        XCTAssertEqual(engine.packet.rx, 32767)
+        _ = engine.moved(id(a), to: CGPoint(x: 550, y: 300))  // one diameter back: already full left
+        XCTAssertEqual(engine.packet.rx, -32767)
+        XCTAssertEqual(engine.right?.center, CGPoint(x: 650, y: 300), "inside the ring the base stays")
+
+        engine.rightSetup.mode = .floating
+        engine.ended(id(a))
+        _ = engine.began(id(a), at: CGPoint(x: 500, y: 300))
+        _ = engine.moved(id(a), to: CGPoint(x: 750, y: 300))
+        XCTAssertEqual(engine.right?.center, CGPoint(x: 500, y: 300), "floating base stays put")
+    }
+
+    func testToggleButtonLatchesUntilTappedAgain() {
+        engine.layout[6].toggle = true  // A
+        _ = engine.began(id(a), at: CGPoint(x: 410, y: 150))
+        engine.ended(id(a))
+        XCTAssertEqual(engine.packet.buttons, .a, "held after the finger lifts")
+        XCTAssertTrue(engine.began(id(b), at: CGPoint(x: 410, y: 150)))
+        XCTAssertEqual(engine.packet.buttons, [])
+        engine.ended(id(b))
+        _ = engine.began(id(a), at: CGPoint(x: 410, y: 150))
+        engine.layout[6].toggle = false  // turning the option off lets go
+        XCTAssertEqual(engine.packet.buttons, [])
+    }
+
+    func testProfileFromOlderBuildKeepsLayoutAndGetsDefaults() throws {
+        let old = #"""
+        {"id":"6A22C07A-905B-4543-AE09-534A7749B4A2","name":"Mine","tilt":true,"keys":\#(String(data: try JSONEncoder().encode(KeyMap.standard), encoding: .utf8)!),
+         "controls":[{"id":"7A22C07A-905B-4543-AE09-534A7749B4A2","control":"lb","frame":[[0.1,0.2],[0.3,0.4]]}]}
+        """#
+        let p = try JSONDecoder().decode(Profile.self, from: Data(old.utf8))
+        XCTAssertEqual(p.name, "Mine")
+        XCTAssertTrue(p.tilt)
+        XCTAssertEqual(p.controls.first?.frame, CGRect(x: 0.1, y: 0.2, width: 0.3, height: 0.4))
+        XCTAssertEqual(p.controls.first?.shape, .square)
+        XCTAssertNil(p.controls.first?.label)
+        XCTAssertEqual(p.leftStick, .left)
+        XCTAssertEqual(p.rightStick.mode, .floating)
+    }
+
+    func testHexColorRoundTrip() {
+        XCTAssertEqual(UIColor(hex: "#FF8000")?.hex, "#FF8000")
+        XCTAssertNil(UIColor(hex: "red"))
     }
 }

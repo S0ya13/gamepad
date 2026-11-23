@@ -43,7 +43,7 @@ struct SettingsView: View {
                     LabeledContent("Name") {
                         TextField("Name", text: $store.profile.name).multilineTextAlignment(.trailing)
                     }
-                    Button("Edit layout", systemImage: "square.grid.2x2") { editingLayout = true }
+                    Button("Edit layout, buttons and sticks", systemImage: "square.grid.2x2") { editingLayout = true }
                     Toggle("Steer by tilting", isOn: $store.profile.tilt)
                     NavigationLink("Keyboard keys") { KeyMapView(keys: $store.profile.keys) }
                     Button("Duplicate", systemImage: "plus.square.on.square") { store.duplicateProfile() }
@@ -72,7 +72,7 @@ struct SettingsView: View {
             .toolbar { Button("Done", action: onDone) }
         }
         .fullScreenCover(isPresented: $editingLayout) {
-            LayoutEditor(controls: $store.profile.controls) { editingLayout = false }
+            LayoutEditor(profile: $store.profile, stickRadius: store.settings.stickRadius) { editingLayout = false }
                 .preferredColorScheme(.dark)
         }
         .fullScreenCover(isPresented: $scanning) {
