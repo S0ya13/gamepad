@@ -8,6 +8,7 @@
 #   scripts/build_and_sign.sh cert.p12 'password' app.mobileprovision
 #   P12_PATH=cert.p12 P12_PASSWORD=... PROVISION_PATH=app.mobileprovision scripts/build_and_sign.sh
 #   NO_INSTALL=1 scripts/build_and_sign.sh ...                  # sign, but don't install
+#   BUILD_NUMBER=7 scripts/build_and_sign.sh                    # CFBundleVersion 7, version <MARKETING_VERSION>.7
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -27,6 +28,11 @@ command -v xcodegen >/dev/null || die "xcodegen not found (brew install xcodegen
 # 1. Release build, no signing.
 cd "$ROOT/iOSClient"
 xcodegen generate --quiet
+VERSION_ARGS=()
+if [[ -n "${BUILD_NUMBER:-}" ]]; then
+  BASE_VERSION="$(sed -n 's/.*MARKETING_VERSION: "\(.*\)"/\1/p' project.yml)"
+  VERSION_ARGS=(CURRENT_PROJECT_VERSION="$BUILD_NUMBER" MARKETING_VERSION="$BASE_VERSION.$BUILD_NUMBER")
+fi
 xcodebuild build \
   -project GamepadClient.xcodeproj \
   -scheme GamepadClient \
@@ -34,7 +40,7 @@ xcodebuild build \
   -destination 'generic/platform=iOS' \
   -derivedDataPath "$DERIVED" \
   -quiet \
-  CODE_SIGNING_ALLOWED=NO
+  CODE_SIGNING_ALLOWED=NO ${VERSION_ARGS[@]+"${VERSION_ARGS[@]}"}
 
 APP="$DERIVED/Build/Products/Release-iphoneos/GamepadClient.app"
 [[ -d "$APP" ]] || die "build product not found: $APP"

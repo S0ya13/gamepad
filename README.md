@@ -48,6 +48,17 @@ scripts/build_and_sign.sh cert.p12 'password' app.mobileprovision   # + build/Ga
 Or pass `P12_PATH`, `P12_PASSWORD`, `PROVISION_PATH` as env vars. Install uses `ideviceinstaller` (`brew install ideviceinstaller`)
 or `ios-deploy` when found; `NO_INSTALL=1` skips it.
 
+## Feather source
+
+Add `https://raw.githubusercontent.com/S0ya13/gamepad-releases/main/source.json` in Feather → Sources.
+Feather signs the unsigned build with your certificate.
+
+Publish a new build (commit first; build number = commit count):
+
+```sh
+scripts/release.sh "what changed"
+```
+
 ## Tests
 
 ```sh
