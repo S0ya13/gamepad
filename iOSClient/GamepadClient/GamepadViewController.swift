@@ -12,6 +12,7 @@ final class GamepadViewController: UIViewController {
     private var connected: Pairing?
     private var observation: AnyCancellable?
     private let motion = CMMotionManager()
+    private var tiltOn = false
     private let rumble = RumblePlayer()
 
     override func loadView() { view = pad }
@@ -106,15 +107,18 @@ final class GamepadViewController: UIViewController {
 
     /// Racing: the phone's tilt replaces the left stick's X.
     private func steer(_ on: Bool) {
-        guard motion.isDeviceMotionAvailable, on != motion.isDeviceMotionActive else { return }
+        guard on != tiltOn else { return }
+        tiltOn = on
         guard on else {
             motion.stopDeviceMotionUpdates()
             pad.setTilt(nil)
             return
         }
+        guard motion.isDeviceMotionAvailable else { return }
         motion.deviceMotionUpdateInterval = 1.0 / 100
         motion.startDeviceMotionUpdates(to: .main) { [weak self] sample, _ in
-            guard let self, let g = sample?.gravity else { return }
+            // Samples already queued arrive after stop; they must not switch tilt back on.
+            guard let self, self.tiltOn, let g = sample?.gravity else { return }
             let landscapeRight = self.view.window?.windowScene?.interfaceOrientation == .landscapeRight
             self.pad.setTilt(TouchEngine.steering(gravityX: g.x, gravityY: g.y, landscapeRight: landscapeRight))
         }
