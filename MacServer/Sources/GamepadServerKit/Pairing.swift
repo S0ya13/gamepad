@@ -3,12 +3,12 @@ import CryptoKit
 import Foundation
 
 /// The Mac's pairing key: one per Mac, shared by every phone that scanned its QR code.
-enum PairingKeyStore {
-    static let file = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+public enum PairingKeyStore {
+    public static let file = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("GamepadServer/pairing.key")
 
     /// The stored key, or a new one when there is none or `rotate` is set (unpairs every phone).
-    static func load(rotate: Bool) throws -> (key: Data, created: Bool) {
+    public static func load(rotate: Bool) throws -> (key: Data, created: Bool) {
         if !rotate, let data = try? Data(contentsOf: file), data.count == 32 { return (data, false) }
         let key = SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) }
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -20,9 +20,9 @@ enum PairingKeyStore {
     }
 }
 
-enum QRCode {
+public enum QRCode {
     /// Dark/light modules, rows top to bottom.
-    static func modules(for text: String) -> [[Bool]] {
+    public static func modules(for text: String) -> [[Bool]] {
         let filter = CIFilter(name: "CIQRCodeGenerator")!
         filter.setValue(Data(text.utf8), forKey: "inputMessage")
         filter.setValue("M", forKey: "inputCorrectionLevel")
@@ -34,7 +34,7 @@ enum QRCode {
     }
 
     /// Half-block rendering with explicit black/white colors, so it scans on dark and light terminal themes.
-    static func terminalString(_ m: [[Bool]], quiet: Int = 4) -> String {
+    public static func terminalString(_ m: [[Bool]], quiet: Int = 4) -> String {
         let size = m.count
         func dark(_ x: Int, _ y: Int) -> Bool { x >= 0 && y >= 0 && x < size && y < size && m[y][x] }
         var out = ""

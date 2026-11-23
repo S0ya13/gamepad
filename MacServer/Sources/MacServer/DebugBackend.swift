@@ -1,4 +1,5 @@
 import Foundation
+import GamepadServerKit
 import SharedProtocol
 
 final class DebugBackend: InputBackend {

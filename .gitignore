@@ -5,3 +5,4 @@ build/
 xcuserdata/
 iOSClient/GamepadClient.xcodeproj/
 iOSClient/Local.xcconfig
+MacApp/GamepadMac.xcodeproj/

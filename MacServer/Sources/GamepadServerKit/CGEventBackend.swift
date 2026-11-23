@@ -3,7 +3,7 @@ import Carbon.HIToolbox
 import Foundation
 import SharedProtocol
 
-final class CGEventBackend: InputBackend {
+public final class CGEventBackend: InputBackend {
     /// Button -> key. Edit this table to remap.
     static let buttonKeys: [(GamepadPacket.Buttons, Int)] = [
         (.a, kVK_Space),
@@ -22,30 +22,29 @@ final class CGEventBackend: InputBackend {
     private static let tickHz = 120.0
 
     private let source = CGEventSource(stateID: .hidSystemState)
-    private let pixelsPerTick: Double
+    /// Mouse pixels per 120 Hz tick at full right-stick deflection.
+    public var pixelsPerTick: Double
     private var pressed = Set<Int>()
     private var look = (x: 0.0, y: 0.0)
     private var remainder = (x: 0.0, y: 0.0)
     private let timer = DispatchSource.makeTimerSource(queue: .main)
 
-    /// Exits with a hint if Accessibility permission is missing (CGEvent posts are silently dropped without it).
-    init(sensitivity: Double) {
+    /// CGEvent posts are silently dropped without Accessibility permission; check `hasAccessibility` first.
+    public init(sensitivity: Double) {
         pixelsPerTick = sensitivity
-        let prompt = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
-        guard AXIsProcessTrustedWithOptions(prompt) else {
-            print("""
-            No Accessibility permission.
-            System Settings → Privacy & Security → Accessibility → enable the app you run this from
-            (Terminal / iTerm / your IDE), then restart it. Use --debug to run without input emulation.
-            """)
-            exit(1)
-        }
         timer.schedule(deadline: .now(), repeating: 1 / Self.tickHz, leeway: .milliseconds(1))
-        timer.setEventHandler { [unowned self] in moveMouse() }
+        timer.setEventHandler { [weak self] in self?.moveMouse() }
         timer.resume()
     }
 
-    func apply(_ p: GamepadPacket) {
+    deinit { timer.cancel() }
+
+    /// `prompt` shows the system dialog that leads to Privacy & Security → Accessibility.
+    public static func hasAccessibility(prompt: Bool) -> Bool {
+        AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue(): prompt] as CFDictionary)
+    }
+
+    public func apply(_ p: GamepadPacket) {
         let lx = GamepadPacket.unit(p.lx), ly = GamepadPacket.unit(p.ly)
         var want = Set<Int>()
         if ly > Self.moveThreshold { want.insert(kVK_ANSI_W) }
@@ -57,7 +56,7 @@ final class CGEventBackend: InputBackend {
         look = (curve(GamepadPacket.unit(p.rx)), curve(GamepadPacket.unit(p.ry)))
     }
 
-    func reset() {
+    public func reset() {
         setKeys([])
         look = (0, 0)
         remainder = (0, 0)

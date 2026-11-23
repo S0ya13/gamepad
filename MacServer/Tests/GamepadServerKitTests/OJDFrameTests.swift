@@ -1,6 +1,6 @@
 import SharedProtocol
 import XCTest
-@testable import MacServer
+@testable import GamepadServerKit
 
 final class OJDFrameTests: XCTestCase {
     func testNeutralFrame() {

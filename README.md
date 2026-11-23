@@ -2,7 +2,18 @@
 
 iPhone → Mac gamepad over UDP (LAN). Packet format: `SharedProtocol/Sources/SharedProtocol/GamepadPacket.swift`.
 
-## Mac server
+## Mac menu bar app
+
+```sh
+scripts/install_mac_app.sh   # builds, installs /Applications/Gamepad.app and starts it
+```
+
+The gamepad icon in the menu bar shows whether the iPhone is connected and holds everything else:
+the pairing QR code, the mode (keyboard & mouse, or an analog gamepad through OpenJoystickDriver for
+Steam/SDL or Apple GameController games), mouse speed, Accessibility status and launch at login.
+The app and the command-line server use the same port and pairing key; run one at a time.
+
+## Mac server (command line)
 
 ```sh
 cd MacServer

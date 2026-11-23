@@ -4,12 +4,15 @@ import PackageDescription
 let package = Package(
     name: "MacServer",
     platforms: [.macOS(.v13)],
+    products: [.library(name: "GamepadServerKit", targets: ["GamepadServerKit"])],
     dependencies: [.package(path: "../SharedProtocol")],
     targets: [
-        .executableTarget(
-            name: "MacServer",
+        // Shared by the command-line server and the menu bar app.
+        .target(
+            name: "GamepadServerKit",
             dependencies: [.product(name: "SharedProtocol", package: "SharedProtocol")]
         ),
-        .testTarget(name: "MacServerTests", dependencies: ["MacServer"]),
+        .executableTarget(name: "MacServer", dependencies: ["GamepadServerKit"]),
+        .testTarget(name: "GamepadServerKitTests", dependencies: ["GamepadServerKit"]),
     ]
 )

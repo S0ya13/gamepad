@@ -1,6 +1,6 @@
 import CoreImage
 import XCTest
-@testable import MacServer
+@testable import GamepadServerKit
 
 final class QRCodeTests: XCTestCase {
     /// The module grid must decode back to the text (catches a flipped or mirrored image).

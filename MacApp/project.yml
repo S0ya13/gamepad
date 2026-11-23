@@ -1,0 +1,34 @@
+name: GamepadMac
+options:
+  deploymentTarget:
+    macOS: "13.0"
+packages:
+  MacServer:
+    path: ../MacServer
+  SharedProtocol:
+    path: ../SharedProtocol
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+targets:
+  GamepadMac:
+    type: application
+    platform: macOS
+    sources:
+      - GamepadMac
+    dependencies:
+      - package: MacServer
+        product: GamepadServerKit
+      - package: SharedProtocol
+    settings:
+      base:
+        PRODUCT_NAME: Gamepad
+        PRODUCT_BUNDLE_IDENTIFIER: com.gamepad.mac
+        INFOPLIST_FILE: GamepadMac/Info.plist
+        GENERATE_INFOPLIST_FILE: YES
+        MARKETING_VERSION: "0.1"
+        CURRENT_PROJECT_VERSION: "1"
+        # No Apple certificate on this Mac: sign locally. macOS may ask for Accessibility again after a rebuild.
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        ENABLE_HARDENED_RUNTIME: NO
