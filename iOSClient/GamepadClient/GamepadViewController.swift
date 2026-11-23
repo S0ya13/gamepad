@@ -35,7 +35,6 @@ final class GamepadViewController: UIViewController {
         let bar = UIStackView(arrangedSubviews: [statusLabel, gear])
         bar.spacing = 4
         bar.alignment = .center
-        bar.backgroundColor = .black  // hides the stick divider behind it
         bar.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(bar)
         // Bottom center, on the border between the two floating sticks.

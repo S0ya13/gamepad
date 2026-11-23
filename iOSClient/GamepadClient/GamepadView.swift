@@ -14,7 +14,7 @@ final class GamepadView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         isMultipleTouchEnabled = true
-        backgroundColor = .black
+        backgroundColor = UIColor(red: 0.035, green: 0.04, blue: 0.055, alpha: 1)
         contentMode = .redraw
         haptic.prepare()
     }
@@ -79,83 +79,91 @@ final class GamepadView: UIView {
 
     override func draw(_ rect: CGRect) {
         guard let ctx = UIGraphicsGetCurrentContext() else { return }
-        let border = UIColor(white: 1, alpha: 0.22)
         let pressed = lastPacket.buttons
-
-        // Divider between the two stick halves; controls drawn on top hide it.
-        border.setStroke()
-        ctx.move(to: CGPoint(x: bounds.midX, y: 0))
-        ctx.addLine(to: CGPoint(x: bounds.midX, y: bounds.maxY))
-        ctx.strokePath()
 
         if let tilt = engine.tilt {
             // Steering gauge where the left stick rests.
             let rest = engine.rest(engine.leftSetup)
             let gauge = CGRect(x: rest.x - 60, y: rest.y, width: 120, height: 2)
-            border.setFill()
+            UIColor(white: 1, alpha: 0.22).setFill()
             ctx.fill(gauge)
             UIColor.white.setFill()
             ctx.fillEllipse(in: CGRect(x: gauge.midX + tilt * 60 - 6, y: rest.y - 5, width: 12, height: 12))
             drawText("TILT", at: CGPoint(x: gauge.midX, y: rest.y - 22), size: 14, alpha: 0.25)
         } else if engine.left == nil {
-            drawStick(center: engine.rest(engine.leftSetup), knob: engine.rest(engine.leftSetup), alpha: 0.25, in: ctx)
+            drawStick(center: engine.rest(engine.leftSetup), knob: engine.rest(engine.leftSetup), active: false, in: ctx)
         }
         if engine.right == nil {
-            drawStick(center: engine.rest(engine.rightSetup), knob: engine.rest(engine.rightSetup), alpha: 0.25, in: ctx)
+            drawStick(center: engine.rest(engine.rightSetup), knob: engine.rest(engine.rightSetup), active: false, in: ctx)
         }
 
         for placed in engine.layout {
             let frame = engine.frame(of: placed)
-            let path = Self.path(placed.shape, in: frame)
             let color = placed.uiColor
-            UIColor.black.setFill()
+            // 0 idle ... 1 fully down; triggers are analog.
+            let level = placed.control.button.map { pressed.contains($0) ? 1 : 0 }
+                ?? CGFloat(placed.control == .lt ? lastPacket.lt : lastPacket.rt) / 255
+            let down = level > 0
+            // A pressed button sinks a little; gaps between neighbours keep cells readable.
+            let sink: CGFloat = down && placed.control.button != nil ? 4 : 2.5
+            let path = Self.path(placed.shape, in: frame.insetBy(dx: sink, dy: sink))
+
+            ctx.saveGState()
+            if down { ctx.setShadow(offset: .zero, blur: 18, color: color.withAlphaComponent(0.9).cgColor) }
+            color.withAlphaComponent(down ? 0.18 : 0.08).setFill()
             path.fill()
-            var down = false
+            ctx.restoreGState()
+
             ctx.saveGState()
             path.addClip()
-            if let button = placed.control.button {
-                down = pressed.contains(button)
-                if down {
-                    color.withAlphaComponent(0.35).setFill()
-                    ctx.fill(frame)
-                }
-            } else {
-                // Trigger: filled from the top as deep as it is pulled.
-                let pull = CGFloat(placed.control == .lt ? lastPacket.lt : lastPacket.rt) / 255
-                down = pull > 0
-                color.withAlphaComponent(0.35).setFill()
-                ctx.fill(CGRect(x: frame.minX, y: frame.minY, width: frame.width, height: frame.height * pull))
-            }
+            // Pressed buttons fill whole; a trigger fills from the top as deep as it is pulled.
+            color.withAlphaComponent(0.45).setFill()
+            ctx.fill(CGRect(x: frame.minX, y: frame.minY, width: frame.width, height: frame.height * level))
             ctx.restoreGState()
-            color.withAlphaComponent(placed.color == nil ? 0.22 : 0.6).setStroke()
-            path.lineWidth = placed.color == nil ? 1 : 2
+
+            color.withAlphaComponent(down ? 1 : 0.45).setStroke()
+            path.lineWidth = 1.5
             path.stroke()
             let title = placed.title
             let size = min(28, frame.height * 0.4, frame.width / CGFloat(max(title.count, 2)) * 1.2)
-            drawText(title, at: CGPoint(x: frame.midX, y: frame.midY), size: size, alpha: down ? 1 : 0.6, color: color)
+            drawText(title, at: CGPoint(x: frame.midX, y: frame.midY), size: size, alpha: down ? 1 : 0.85,
+                     color: down ? .white : color)
         }
 
         for (stick, sprint) in [(engine.left, engine.l3), (engine.right, false)] {
             guard let stick else { continue }
-            drawStick(center: stick.center, knob: engine.knob(stick), alpha: 1,
+            drawStick(center: stick.center, knob: engine.knob(stick), active: true,
                       color: sprint ? .systemOrange : .white, in: ctx)
         }
     }
 
-    /// Ring and knob; at rest they are drawn faint where the stick lives.
-    private func drawStick(center: CGPoint, knob: CGPoint, alpha: CGFloat, color: UIColor = .white, in ctx: CGContext) {
+    /// Base and knob; at rest they are drawn faint where the stick lives.
+    private func drawStick(center: CGPoint, knob: CGPoint, active: Bool, color: UIColor = .white, in ctx: CGContext) {
         let r = engine.stickRadius
-        color.withAlphaComponent(alpha * 0.5).setStroke()
-        ctx.strokeEllipse(in: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2))
-        color.withAlphaComponent(alpha).setFill()
-        ctx.fillEllipse(in: CGRect(x: knob.x - 22, y: knob.y - 22, width: 44, height: 44))
+        let base = CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)
+        color.withAlphaComponent(active ? 0.08 : 0.03).setFill()
+        ctx.fillEllipse(in: base)
+        color.withAlphaComponent(active ? 0.45 : 0.16).setStroke()
+        ctx.setLineWidth(2)
+        ctx.strokeEllipse(in: base.insetBy(dx: 1, dy: 1))
+
+        let k = CGRect(x: knob.x - 26, y: knob.y - 26, width: 52, height: 52)
+        ctx.saveGState()
+        if active { ctx.setShadow(offset: .zero, blur: 16, color: color.withAlphaComponent(0.6).cgColor) }
+        color.withAlphaComponent(active ? 0.92 : 0.2).setFill()
+        ctx.fillEllipse(in: k)
+        ctx.restoreGState()
+        // Grip ring on the knob.
+        UIColor(white: 0, alpha: active ? 0.18 : 0.3).setStroke()
+        ctx.setLineWidth(1.5)
+        ctx.strokeEllipse(in: k.insetBy(dx: 8, dy: 8))
     }
 
     /// The control's outline; the whole rectangle still takes touches, so a circle is easy to hit.
     static func path(_ shape: Profile.Placed.Shape, in frame: CGRect) -> UIBezierPath {
-        let inset = frame.insetBy(dx: 1, dy: 1)
+        let inset = frame
         switch shape {
-        case .square: return UIBezierPath(rect: inset)
+        case .square: return UIBezierPath(roundedRect: inset, cornerRadius: 6)
         case .rounded: return UIBezierPath(roundedRect: inset, cornerRadius: min(inset.width, inset.height) * 0.25)
         case .circle:
             let d = min(inset.width, inset.height)

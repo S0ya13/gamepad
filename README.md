@@ -78,8 +78,10 @@ Allow Local Network access on first launch. The line next to ⚙ shows the Mac a
 the L3 threshold and vibration. Settings are stored on the phone.
 
 Game profiles (⚙ → Game profile) hold the layout, tilt steering and keyboard keys for one game.
-Two come built in:
+Three come built in (phones updated from an older build get Controller added once):
 
+- **Controller**: laid out like a real pad: LT LB / Back Start / RB RT along the top, a D-pad cross on the
+  left, an A B X Y diamond on the right (green, red, blue, yellow by default), sticks resting between them.
 - **Standard**: top 40% are buttons (left 2×2: ◀ ▲ / ▼ ▶, right 2×2: X Y / A B), the rest are floating sticks.
 - **Racing**: LB X Y A B RB along the top, LT (brake) and RT (gas) as tall pedals on the sides,
   steering by tilting the phone like a wheel (45° = full lock).

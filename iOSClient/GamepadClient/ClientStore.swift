@@ -48,9 +48,19 @@ final class ClientStore: ObservableObject {
         pairings = Self.load("pairings") ?? []
         activeName = UserDefaults.standard.string(forKey: "activeName")
         let saved: [Profile] = Self.load("profiles") ?? []
-        let profiles = saved.isEmpty ? [.standard, .racing] : saved
+        var profiles = saved.isEmpty ? [.controller, .standard, .racing] : saved
+        // Installs from before the Controller preset get it once; deleting it later sticks.
+        if !UserDefaults.standard.bool(forKey: "hasControllerPreset") {
+            if !profiles.contains(where: { $0.name == Profile.controller.name }) { profiles.insert(.controller, at: 0) }
+            UserDefaults.standard.set(true, forKey: "hasControllerPreset")
+        }
         self.profiles = profiles
-        activeProfileID = UserDefaults.standard.string(forKey: "activeProfile").flatMap(UUID.init) ?? profiles[0].id
+        let savedID = UserDefaults.standard.string(forKey: "activeProfile").flatMap(UUID.init)
+        activeProfileID = profiles.contains { $0.id == savedID } ? savedID! : profiles[0].id
+        // didSet doesn't run in init: store built-in and migrated profiles now, or their ids change next launch.
+        // Never over data that failed to decode: that would wipe the user's layouts.
+        let unreadable = saved.isEmpty && UserDefaults.standard.data(forKey: "profiles") != nil
+        if !unreadable { save(profiles, as: "profiles") }
     }
 
     /// A copy of the current profile becomes the current one, so a new game starts from a working layout.

@@ -73,6 +73,7 @@ struct LayoutEditor: View {
                 .frame(width: 260)
             }
             Menu("Start over", systemImage: "arrow.counterclockwise") {
+                Button("Controller layout") { reset(to: .controller) }
                 Button("Standard layout") { reset(to: .standard) }
                 Button("Racing layout") { reset(to: .racing) }
             }
@@ -249,7 +250,7 @@ private struct ButtonSetup: View {
                     get: { Color(uiColor: placed.uiColor) },
                     set: { placed.color = UIColor($0).hex }), supportsOpacity: false)
                 if placed.color != nil {
-                    Button("White (default)") { placed.color = nil }
+                    Button("Default colour") { placed.color = nil }
                 }
                 if placed.control.button != nil {
                     Section {

@@ -56,6 +56,33 @@ struct Profile: Codable, Equatable, Identifiable {
     static let standard = Profile(name: "Standard", controls: grid([.left, .up, .down, .right], x: 0)
         + grid([.x, .y, .a, .b], x: 0.5))
 
+    /// Laid out like a real controller: shoulders on top, D-pad cross, ABXY diamond, Back/Start between.
+    static let controller: Profile = {
+        // Square cells on a ~2.17:1 landscape screen: height = width * 2.17.
+        func cell(_ control: Control, _ cx: Double, _ cy: Double, _ w: Double, _ shape: Placed.Shape) -> Placed {
+            let h = w * 2.17
+            return Placed(control: control, frame: CGRect(x: cx - w / 2, y: cy - h / 2, width: w, height: h), shape: shape)
+        }
+        let d = 0.062, f = 0.074  // D-pad cell, face button
+        let pad = [(Control.up, 0.0, -1.0), (.down, 0, 1), (.left, -1, 0), (.right, 1, 0)].map { c, dx, dy in
+            cell(c, 0.16 + dx * d, 0.45 + dy * d * 2.17, d, .rounded)
+        }
+        let face = [(Control.y, 0.0, -1.0), (.a, 0, 1), (.x, -1, 0), (.b, 1, 0)].map { c, dx, dy in
+            cell(c, 0.84 + dx * f * 1.05, 0.45 + dy * f * 2.17 * 1.05, f, .circle)
+        }
+        let top: [Placed] = [
+            Placed(control: .lt, frame: CGRect(x: 0, y: 0, width: 0.13, height: 0.15), shape: .rounded),
+            Placed(control: .lb, frame: CGRect(x: 0.13, y: 0, width: 0.13, height: 0.15), shape: .rounded),
+            Placed(control: .back, frame: CGRect(x: 0.4, y: 0.02, width: 0.09, height: 0.11), shape: .rounded),
+            Placed(control: .start, frame: CGRect(x: 0.51, y: 0.02, width: 0.09, height: 0.11), shape: .rounded),
+            Placed(control: .rb, frame: CGRect(x: 0.74, y: 0, width: 0.13, height: 0.15), shape: .rounded),
+            Placed(control: .rt, frame: CGRect(x: 0.87, y: 0, width: 0.13, height: 0.15), shape: .rounded),
+        ]
+        return Profile(name: "Controller", controls: top + pad + face,
+                       leftStick: StickSetup(center: CGPoint(x: 0.36, y: 0.66)),
+                       rightStick: StickSetup(center: CGPoint(x: 0.64, y: 0.66)))
+    }()
+
     /// Tilt to steer, pedals on the sides: LT brake on the left, RT gas on the right.
     static let racing = Profile(
         name: "Racing",
@@ -101,7 +128,13 @@ extension Profile.Placed {
         toggle = try c.decodeIfPresent(Bool.self, forKey: .toggle) ?? false
     }
 
-    var uiColor: UIColor { color.flatMap(UIColor.init(hex:)) ?? .white }
+    /// The chosen colour, else the face buttons' usual colours, else white.
+    var uiColor: UIColor { color.flatMap(UIColor.init(hex:)) ?? Self.faceColors[control] ?? .white }
+
+    static let faceColors: [Control: UIColor] = [
+        .a: UIColor(red: 0.30, green: 0.85, blue: 0.45, alpha: 1), .b: UIColor(red: 1, green: 0.33, blue: 0.30, alpha: 1),
+        .x: UIColor(red: 0.25, green: 0.6, blue: 1, alpha: 1), .y: UIColor(red: 1, green: 0.82, blue: 0.2, alpha: 1),
+    ]
 }
 
 extension UIColor {
