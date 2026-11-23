@@ -60,6 +60,10 @@ struct MenuView: View {
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
 
+            if model.client != nil {
+                Button("Test vibration on the iPhone", systemImage: "iphone.radiowaves.left.and.right") { model.testRumble() }
+            }
+
             Divider()
 
             DisclosureGroup("Pair an iPhone", isExpanded: $model.showPairing) {

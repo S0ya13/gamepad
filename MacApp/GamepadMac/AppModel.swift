@@ -78,6 +78,12 @@ final class AppModel: ObservableObject {
         showPairing = true
     }
 
+    /// Half a second of game-style rumble, to check the phone side without a game.
+    func testRumble() {
+        server?.rumble(low: 200, high: 100)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.server?.rumble(low: 0, high: 0) }
+    }
+
     func refreshAccessibility(prompt: Bool = false) {
         let granted = CGEventBackend.hasAccessibility(prompt: prompt)
         if granted != hasAccessibility { hasAccessibility = granted }
