@@ -227,4 +227,47 @@ final class TouchEngineTests: XCTestCase {
         a.color = "#123456"
         XCTAssertEqual(a.uiColor(.neon).hex, "#123456", "the button's own colour wins")
     }
+
+    func testCameraSwipeReadsSpeedAndStopsWhenFingerRests() {
+        engine.rightSetup.mode = .swipe
+        engine.swipeFullSpeed = 600
+        _ = engine.began(id(a), at: CGPoint(x: 600, y: 300), time: 1)
+        XCTAssertEqual(engine.packet.rx, 0, "a touch alone doesn't turn the camera")
+        _ = engine.moved(id(a), to: CGPoint(x: 606, y: 300), time: 1.01)  // 600 pt/s, smoothed to half
+        XCTAssertEqual(GamepadPacket.unit(engine.packet.rx), 0.12 + 0.88 * 0.5, accuracy: 1e-3)
+        _ = engine.moved(id(a), to: CGPoint(x: 612, y: 300), time: 1.02)  // 0.75 of full speed
+        XCTAssertEqual(GamepadPacket.unit(engine.packet.rx), 0.12 + 0.88 * 0.75, accuracy: 1e-3)
+        XCTAssertEqual(engine.packet.ry, 0)
+        XCTAssertTrue(engine.needsTicks)
+        engine.tick(1.05)
+        XCTAssertNotEqual(engine.packet.rx, 0, "30 ms between samples is still moving")
+        engine.tick(1.07)
+        XCTAssertEqual(engine.packet.rx, 0, "finger stopped: camera stops")
+        _ = engine.moved(id(a), to: CGPoint(x: 612, y: 290), time: 1.08)
+        _ = engine.moved(id(a), to: CGPoint(x: 612, y: 260), time: 1.09)  // up, far past full speed
+        XCTAssertEqual(engine.packet.ry, 32767)
+        engine.ended(id(a))
+        XCTAssertFalse(engine.needsTicks)
+    }
+
+    func testTurboPulsesWhileHeld() {
+        engine.layout[6].turbo = true  // A
+        _ = engine.began(id(a), at: CGPoint(x: 410, y: 150), time: 10)
+        XCTAssertTrue(engine.needsTicks)
+        XCTAssertEqual(engine.packet.buttons, .a, "first frame is a press")
+        engine.tick(10.06)
+        XCTAssertEqual(engine.packet.buttons, [])
+        engine.tick(10.11)
+        XCTAssertEqual(engine.packet.buttons, .a)
+        engine.ended(id(a))
+        XCTAssertFalse(engine.needsTicks)
+        XCTAssertEqual(engine.packet.buttons, [])
+    }
+
+    func testStickOwnSizeOverridesSettings() {
+        engine.leftSetup.radius = 50  // settings say 100
+        _ = engine.began(id(a), at: CGPoint(x: 200, y: 300))
+        _ = engine.moved(id(a), to: CGPoint(x: 225, y: 300))
+        XCTAssertEqual(GamepadPacket.unit(engine.packet.lx), 0.5, accuracy: 1e-3)
+    }
 }

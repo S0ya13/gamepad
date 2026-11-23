@@ -20,6 +20,8 @@ struct Profile: Codable, Equatable, Identifiable {
         var color: String?
         /// Tap once to hold the button down, tap again to let go (buttons only, not triggers).
         var toggle = false
+        /// While held, pressed and released 10 times a second (buttons only).
+        var turbo = false
 
         var title: String { label.flatMap { $0.isEmpty ? nil : $0 } ?? control.title }
     }
@@ -33,11 +35,15 @@ struct Profile: Codable, Equatable, Identifiable {
             case floating
             /// Like floating, and the base follows the finger when it runs past the ring.
             case dynamic
+            /// No stick: the camera turns as fast as the finger slides, like a touchpad.
+            case swipe
         }
 
         var mode = Mode.dynamic
         /// Resting spot in 0...1 of the screen, kept in the stick's half.
         var center: CGPoint
+        /// Own size in points; nil uses the size from Settings.
+        var radius: Double?
 
         static let left = StickSetup(center: CGPoint(x: 0.25, y: 0.7))
         static let right = StickSetup(center: CGPoint(x: 0.75, y: 0.7))
@@ -128,6 +134,7 @@ extension Profile.Placed {
         shape = try c.decodeIfPresent(Shape.self, forKey: .shape) ?? .square
         color = try c.decodeIfPresent(String.self, forKey: .color)
         toggle = try c.decodeIfPresent(Bool.self, forKey: .toggle) ?? false
+        turbo = try c.decodeIfPresent(Bool.self, forKey: .turbo) ?? false
     }
 
     /// The button's own colour, else the theme's.

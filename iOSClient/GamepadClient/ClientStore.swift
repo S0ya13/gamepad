@@ -8,6 +8,8 @@ final class ClientStore: ObservableObject {
         var deadZone = 0.05
         var l3Threshold = 0.88
         var haptics = true
+        /// Camera swipe speed multiplier.
+        var swipeSpeed = 1.0
     }
 
     @Published var settings: Settings {
@@ -96,5 +98,18 @@ final class ClientStore: ObservableObject {
 
     private static func load<T: Decodable>(_ key: String) -> T? {
         UserDefaults.standard.data(forKey: key).flatMap { try? JSONDecoder().decode(T.self, from: $0) }
+    }
+}
+
+// Settings saved by older builds lack newer fields; they keep their values instead of resetting.
+extension ClientStore.Settings {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = Self()
+        stickRadius = try c.decodeIfPresent(Double.self, forKey: .stickRadius) ?? d.stickRadius
+        deadZone = try c.decodeIfPresent(Double.self, forKey: .deadZone) ?? d.deadZone
+        l3Threshold = try c.decodeIfPresent(Double.self, forKey: .l3Threshold) ?? d.l3Threshold
+        haptics = try c.decodeIfPresent(Bool.self, forKey: .haptics) ?? d.haptics
+        swipeSpeed = try c.decodeIfPresent(Double.self, forKey: .swipeSpeed) ?? d.swipeSpeed
     }
 }

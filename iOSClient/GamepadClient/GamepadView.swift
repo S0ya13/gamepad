@@ -37,7 +37,9 @@ final class GamepadView: UIView {
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         var buzz = false
-        for t in touches where engine.began(ObjectIdentifier(t), at: t.location(in: self)) { buzz = true }
+        for t in touches where engine.began(ObjectIdentifier(t), at: t.location(in: self), time: t.timestamp) {
+            buzz = true
+        }
         commit(buzz)
     }
 
@@ -46,7 +48,7 @@ final class GamepadView: UIView {
         for t in touches {
             // Coalesced samples (up to 240 Hz) so a fast flick can't skip over the L3 ring unnoticed.
             for sample in event?.coalescedTouches(for: t) ?? [t]
-            where engine.moved(ObjectIdentifier(t), to: sample.location(in: self)) { buzz = true }
+            where engine.moved(ObjectIdentifier(t), to: sample.location(in: self), time: sample.timestamp) { buzz = true }
         }
         commit(buzz)
     }
@@ -68,7 +70,22 @@ final class GamepadView: UIView {
         commit(false)
     }
 
+    /// Runs only while turbo or a camera swipe needs the clock; touch timestamps share its time base.
+    private lazy var clock: CADisplayLink = {
+        let link = CADisplayLink(target: self, selector: #selector(tick))
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
+        link.isPaused = true
+        link.add(to: .main, forMode: .common)
+        return link
+    }()
+
+    @objc private func tick(_ link: CADisplayLink) {
+        engine.tick(link.timestamp)
+        commit(false)
+    }
+
     private func commit(_ buzz: Bool) {
+        if clock.isPaused == engine.needsTicks { clock.isPaused = !engine.needsTicks }
         let packet = engine.packet
         if packet != lastPacket {
             lastPacket = packet
@@ -97,13 +114,9 @@ final class GamepadView: UIView {
             ctx.fillEllipse(in: CGRect(x: gauge.midX + tilt * 60 - 6, y: rest.y - 5, width: 12, height: 12))
             drawText("TILT", at: CGPoint(x: gauge.midX, y: rest.y - 22), size: 14, alpha: 0.25)
         } else if engine.left == nil {
-            drawStick(center: engine.rest(engine.leftSetup), knob: engine.rest(engine.leftSetup), active: false,
-                      color: theme.stick, in: ctx)
+            drawRest(engine.leftSetup, in: ctx)
         }
-        if engine.right == nil {
-            drawStick(center: engine.rest(engine.rightSetup), knob: engine.rest(engine.rightSetup), active: false,
-                      color: theme.stick, in: ctx)
-        }
+        if engine.right == nil { drawRest(engine.rightSetup, in: ctx) }
 
         for placed in engine.layout {
             let frame = engine.frame(of: placed)
@@ -136,18 +149,45 @@ final class GamepadView: UIView {
             let size = min(28, frame.height * 0.4, frame.width / CGFloat(max(title.count, 2)) * 1.2)
             drawText(title, at: CGPoint(x: frame.midX, y: frame.midY), size: size, alpha: down ? 1 : 0.85,
                      color: down ? .white : color)
+            if placed.turbo && frame.height > 36 {
+                drawText("TURBO", at: CGPoint(x: frame.midX, y: frame.midY + size * 0.75), size: 9, alpha: 0.7, color: color)
+            }
         }
 
         for (stick, sprint) in [(engine.left, engine.l3), (engine.right, false)] {
             guard let stick else { continue }
-            drawStick(center: stick.center, knob: engine.knob(stick), active: true,
-                      color: sprint ? .systemOrange : theme.stick, in: ctx)
+            if stick.swipe {
+                // Camera swipe: a glowing dot under the finger.
+                ctx.saveGState()
+                ctx.setShadow(offset: .zero, blur: 18, color: theme.stick.withAlphaComponent(0.8).cgColor)
+                theme.stick.withAlphaComponent(0.5).setFill()
+                ctx.fillEllipse(in: CGRect(x: stick.position.x - 20, y: stick.position.y - 20, width: 40, height: 40))
+                ctx.restoreGState()
+            } else {
+                drawStick(center: stick.center, knob: engine.knob(stick), radius: stick.radius, active: true,
+                          color: sprint ? .systemOrange : theme.stick, in: ctx)
+            }
         }
     }
 
     /// Base and knob; at rest they are drawn faint where the stick lives.
-    private func drawStick(center: CGPoint, knob: CGPoint, active: Bool, color: UIColor, in ctx: CGContext) {
-        let r = engine.stickRadius
+    /// Where an idle stick lives: a faint stick, or a dashed area for a camera swipe.
+    private func drawRest(_ setup: Profile.StickSetup, in ctx: CGContext) {
+        let c = engine.rest(setup), r = engine.radius(setup)
+        guard setup.mode == .swipe else {
+            drawStick(center: c, knob: c, radius: r, active: false, color: theme.stick, in: ctx)
+            return
+        }
+        theme.stick.withAlphaComponent(0.16).setStroke()
+        ctx.setLineWidth(2)
+        ctx.setLineDash(phase: 0, lengths: [6, 6])
+        ctx.strokeEllipse(in: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2))
+        ctx.setLineDash(phase: 0, lengths: [])
+        drawText("SWIPE", at: c, size: 12, alpha: 0.3, color: theme.stick)
+    }
+
+    private func drawStick(center: CGPoint, knob: CGPoint, radius r: CGFloat, active: Bool, color: UIColor,
+                           in ctx: CGContext) {
         let base = CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)
         color.withAlphaComponent(active ? 0.08 : 0.03).setFill()
         ctx.fillEllipse(in: base)

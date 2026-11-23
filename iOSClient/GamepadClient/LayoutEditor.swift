@@ -11,6 +11,7 @@ struct LayoutEditor: View {
     /// true: the left stick is selected, false: the right one.
     @State private var selectedStick: Bool?
     @State private var styling = false
+    @State private var stickSetup = false
 
     var body: some View {
         GeometryReader { geo in
@@ -25,9 +26,9 @@ struct LayoutEditor: View {
                     .frame(width: geo.size.width)
                     .offset(y: geo.size.height * 0.45)
                     .allowsHitTesting(false)
-                EditableStick(setup: $profile.leftStick, left: true, radius: stickRadius, canvas: geo.size,
+                EditableStick(setup: $profile.leftStick, left: true, radius: profile.leftStick.radius.map { CGFloat($0) } ?? stickRadius, canvas: geo.size,
                               selected: selectedStick == true) { select(nil, stick: true) }
-                EditableStick(setup: $profile.rightStick, left: false, radius: stickRadius, canvas: geo.size,
+                EditableStick(setup: $profile.rightStick, left: false, radius: profile.rightStick.radius.map { CGFloat($0) } ?? stickRadius, canvas: geo.size,
                               selected: selectedStick == false) { select(nil, stick: false) }
                 ForEach($profile.controls) { $placed in
                     EditableControl(placed: $placed, theme: profile.theme, canvas: geo.size, selected: selected == placed.id) {
@@ -42,6 +43,15 @@ struct LayoutEditor: View {
             if let index = profile.controls.firstIndex(where: { $0.id == selected }) {
                 ButtonSetup(placed: $profile.controls[index], theme: profile.theme) { styling = false }
                     .preferredColorScheme(.dark)
+            }
+        }
+        .sheet(isPresented: $stickSetup) {
+            if let left = selectedStick {
+                StickSetupView(setup: left ? $profile.leftStick : $profile.rightStick,
+                               title: left ? "Left stick" : "Right stick", defaultRadius: stickRadius) {
+                    stickSetup = false
+                }
+                .preferredColorScheme(.dark)
             }
         }
     }
@@ -65,12 +75,8 @@ struct LayoutEditor: View {
                     selected = nil
                 }
             }
-            if let left = selectedStick {
-                Picker("Stick", selection: left ? $profile.leftStick.mode : $profile.rightStick.mode) {
-                    ForEach(Profile.StickSetup.Mode.allCases, id: \.self) { Text($0.title) }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 260)
+            if selectedStick != nil {
+                Button("Set up stick", systemImage: "slider.horizontal.3") { stickSetup = true }
             }
             Menu("Start over", systemImage: "arrow.counterclockwise") {
                 Button("Controller layout") { reset(to: .controller) }
@@ -109,6 +115,7 @@ extension Profile.StickSetup.Mode {
         case .fixed: "Fixed"
         case .floating: "Floating"
         case .dynamic: "Follows finger"
+        case .swipe: "Camera swipe"
         }
     }
 }
@@ -257,14 +264,63 @@ private struct ButtonSetup: View {
                 if placed.control.button != nil {
                     Section {
                         Toggle("Stays pressed", isOn: $placed.toggle)
+                        Toggle("Turbo", isOn: $placed.turbo)
                     } footer: {
-                        Text("Tap once to hold the button down, tap again to let go. For sprint, crouch or aim held across a long run.")
+                        Text("Stays pressed: tap once to hold the button down, tap again to let go (sprint, crouch, aim). Turbo: while held, the button is pressed 10 times a second. Both together: one tap starts turbo, the next stops it.")
                     }
                 }
             }
             .navigationTitle(placed.control.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { Button("Done", action: onDone) }
+        }
+    }
+}
+
+/// A stick's mode and size.
+private struct StickSetupView: View {
+    @Binding var setup: Profile.StickSetup
+    let title: String
+    let defaultRadius: CGFloat
+    let onDone: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Picker("Mode", selection: $setup.mode) {
+                        ForEach(Profile.StickSetup.Mode.allCases, id: \.self) { Text($0.title) }
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                } footer: {
+                    Text(setup.mode.help)
+                }
+                Section {
+                    VStack(alignment: .leading) {
+                        LabeledContent("Size", value: "\(Int(setup.radius ?? defaultRadius)) pt").monospacedDigit()
+                        Slider(value: Binding(get: { setup.radius ?? defaultRadius }, set: { setup.radius = $0.rounded() }),
+                               in: 35...110)
+                    }
+                    if setup.radius != nil {
+                        Button("Same as in Settings") { setup.radius = nil }
+                    }
+                }
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { Button("Done", action: onDone) }
+        }
+    }
+}
+
+private extension Profile.StickSetup.Mode {
+    var help: String {
+        switch self {
+        case .fixed: "The stick stays where you put it; touch near it to move."
+        case .floating: "The stick appears where your finger lands."
+        case .dynamic: "The stick appears where your finger lands and follows it past the ring, so it never runs out."
+        case .swipe: "No stick: the camera turns as fast as you slide, like a touchpad. Lift or stop to stop turning. Speed is in Settings → Sticks."
         }
     }
 }
