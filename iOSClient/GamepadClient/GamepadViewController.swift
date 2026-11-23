@@ -1,12 +1,15 @@
+import Combine
 import SharedProtocol
+import SwiftUI
 import UIKit
 
 final class GamepadViewController: UIViewController {
-    private static let pairingKey = "pairing"
-
+    private let store = ClientStore()
     private let pad = GamepadView()
     private let statusLabel = UILabel()
     private let udp = UDPClient()
+    private var connected: Pairing?
+    private var observation: AnyCancellable?
 
     override func loadView() { view = pad }
 
@@ -14,44 +17,85 @@ final class GamepadViewController: UIViewController {
         super.viewDidLoad()
         overrideUserInterfaceStyle = .dark
 
-        statusLabel.font = .systemFont(ofSize: 11)
+        statusLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         statusLabel.textColor = UIColor(white: 1, alpha: 0.5)
         statusLabel.textAlignment = .center
         statusLabel.numberOfLines = 2
-        statusLabel.backgroundColor = .black  // hides the stick divider behind the text
-        statusLabel.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(statusLabel)
+
+        let gear = UIButton(type: .system)
+        gear.setImage(UIImage(systemName: "gearshape.fill"), for: .normal)
+        gear.tintColor = UIColor(white: 1, alpha: 0.5)
+        gear.accessibilityLabel = "Settings"
+        gear.addTarget(self, action: #selector(openSettings), for: .touchUpInside)
+
+        let bar = UIStackView(arrangedSubviews: [statusLabel, gear])
+        bar.spacing = 4
+        bar.alignment = .center
+        bar.backgroundColor = .black  // hides the stick divider behind it
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(bar)
         // Bottom center, on the border between the two floating sticks.
         NSLayoutConstraint.activate([
-            statusLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            statusLabel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -6),
+            bar.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            bar.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
             statusLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 260),
+            gear.widthAnchor.constraint(equalToConstant: 44),
+            gear.heightAnchor.constraint(equalToConstant: 44),
         ])
 
         pad.onChange = { [udp] packet in udp.send(packet) }
-        udp.onStatus = { [weak self] text in self?.statusLabel.text = text }
+        udp.onPing = { [store] in store.ping = $0 }
+        udp.onProblem = { [store] in store.problem = $0 }
         NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil,
                                                queue: .main) { [udp] _ in udp.resume() }
+        // objectWillChange fires before the new value is stored, so read the store on the next turn.
+        observation = store.objectWillChange.sink { [weak self] in
+            DispatchQueue.main.async { self?.refresh() }
+        }
+        refresh()
+    }
 
-        // shortcut: the key sits in UserDefaults (app sandbox), not the Keychain; move it if the app is ever shared.
-        if let data = UserDefaults.standard.data(forKey: Self.pairingKey),
-           let pairing = try? JSONDecoder().decode(Pairing.self, from: data) {
-            statusLabel.text = "connecting to \(pairing.name)…"
-            udp.connect(pairing)
+    /// A `gamepad-pair://` link from the Mac's QR code, opened with the Camera app.
+    func pair(with url: URL) {
+        guard let pairing = Pairing(url: url) else {
+            store.problem = "not a valid pairing link"
+            return
+        }
+        store.add(pairing)
+    }
+
+    private func refresh() {
+        let s = store.settings
+        if pad.engine.stickRadius != s.stickRadius {
+            pad.engine.stickRadius = s.stickRadius
+            pad.setNeedsDisplay()
+        }
+        pad.engine.deadZone = s.deadZone
+        pad.engine.l3Threshold = s.l3Threshold
+        pad.haptics = s.haptics
+
+        if store.active != connected {
+            connected = store.active
+            if let connected { udp.connect(connected) } else { udp.disconnect() }
+        }
+
+        guard let mac = connected else {
+            statusLabel.text = "Not paired: tap ⚙ and scan the QR code\nfrom the Gamepad menu on the Mac."
+            return
+        }
+        if let ping = store.ping {
+            statusLabel.text = "● \(mac.name) · \(Int(ping.rounded())) ms"
         } else {
-            statusLabel.text = "Not paired. Run MacServer --pair on the Mac\nand scan the QR code with the Camera."
+            statusLabel.text = "○ \(mac.name) — \(store.problem ?? "no response")"
         }
     }
 
-    /// A `gamepad-pair://` link from the Mac's QR code.
-    func pair(with url: URL) {
-        guard let pairing = Pairing(url: url) else {
-            statusLabel.text = "This is not a valid pairing link."
-            return
-        }
-        UserDefaults.standard.set(try? JSONEncoder().encode(pairing), forKey: Self.pairingKey)
-        statusLabel.text = "paired with \(pairing.name), connecting…"
-        udp.connect(pairing)
+    @objc private func openSettings() {
+        let settings = UIHostingController(rootView: SettingsView(store: store) { [weak self] in
+            self?.dismiss(animated: true)
+        })
+        settings.overrideUserInterfaceStyle = .dark
+        present(settings, animated: true)
     }
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .landscape }

@@ -63,10 +63,15 @@ once, so it survives `xcodegen` regeneration:
 DEVELOPMENT_TEAM = ABCDE12345
 ```
 
-Pair by scanning the server's QR code with the Camera (see above). Allow Local Network access on first launch.
+Pair by scanning the Mac's QR code: ⚙ (bottom center) → *Pair a Mac*, or with the Camera app (see above).
+Allow Local Network access on first launch. The line next to ⚙ shows the Mac and the round trip
+(`● SoyaMac · 4 ms`), or `no response` when the Mac stops answering for a second.
+
+⚙ also holds the list of paired Macs (tap to switch, swipe to delete), stick size, dead zone,
+the L3 threshold and vibration. Settings are stored on the phone.
 
 Layout (landscape): top 40% are buttons (left 2×2: ◀ ▲ / ▼ ▶, right 2×2: X Y / A B),
-bottom 60% are floating sticks. Pushing the left stick past 88% of its radius holds L3 (sprint).
+bottom 60% are floating sticks. Pushing the left stick past 88% of its radius (adjustable) holds L3 (sprint).
 
 ## Build and sign an .ipa
 

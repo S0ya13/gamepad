@@ -6,6 +6,7 @@ final class GamepadView: UIView {
     let engine = TouchEngine()
     /// Called on every state change, before redraw.
     var onChange: ((GamepadPacket) -> Void)?
+    var haptics = true
 
     private let haptic = UIImpactFeedbackGenerator(style: .light)
     private var lastPacket = GamepadPacket()
@@ -66,7 +67,7 @@ final class GamepadView: UIView {
             onChange?(packet)  // network first, drawing after
             setNeedsDisplay()
         }
-        if buzz {
+        if buzz && haptics {
             haptic.impactOccurred()
             haptic.prepare()
         }

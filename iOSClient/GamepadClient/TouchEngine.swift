@@ -12,14 +12,17 @@ final class TouchEngine {
     }
 
     static let buttonZoneFraction: CGFloat = 0.4
-    static let l3On: CGFloat = 0.88
-    static let l3Off: CGFloat = 0.84  // hysteresis: a trembling finger on the ring must not buzz the haptic
     /// D-pad / ABXY diamonds rotated 45° into a 2×2 grid: top-left, top-right, bottom-left, bottom-right.
     static let leftGrid: [Buttons] = [.dpadLeft, .dpadUp, .dpadDown, .dpadRight]
     static let rightGrid: [Buttons] = [.x, .y, .a, .b]
 
     var size: CGSize = .zero
     var stickRadius: CGFloat = 70
+    /// Deflection (0...1) below which the stick reads 0; the rest is rescaled so full deflection still gives 1.
+    var deadZone: CGFloat = 0
+    /// Left-stick deflection (0...1) that holds L3.
+    var l3Threshold: CGFloat = 0.88
+    private static let l3Hysteresis: CGFloat = 0.04  // a trembling finger on the ring must not buzz the haptic
 
     private(set) var left: Stick?
     private(set) var right: Stick?
@@ -48,7 +51,7 @@ final class TouchEngine {
         guard let stick = left, stick.touch == touch else { return false }
         left?.position = p
         let wasL3 = l3
-        l3 = deflection(left!) > (wasL3 ? Self.l3Off : Self.l3On)
+        l3 = deflection(left!) > (wasL3 ? l3Threshold - Self.l3Hysteresis : l3Threshold)
         return l3 && !wasL3
     }
 
@@ -68,10 +71,12 @@ final class TouchEngine {
                              rx: GamepadPacket.axis(r.x), ry: GamepadPacket.axis(r.y))
     }
 
-    /// Knob position clamped to the ring.
+    /// Finger position clamped to the ring (drawn as is, without the dead zone).
     func knob(_ s: Stick) -> CGPoint {
-        let a = axes(s)
-        return CGPoint(x: s.center.x + CGFloat(a.x) * stickRadius, y: s.center.y - CGFloat(a.y) * stickRadius)
+        let dx = s.position.x - s.center.x, dy = s.position.y - s.center.y
+        let length = hypot(dx, dy)
+        guard length > stickRadius else { return s.position }
+        return CGPoint(x: s.center.x + dx / length * stickRadius, y: s.center.y + dy / length * stickRadius)
     }
 
     /// Same grid as `began` hit-testing, for drawing.
@@ -87,13 +92,14 @@ final class TouchEngine {
         min(hypot(s.position.x - s.center.x, s.position.y - s.center.y) / stickRadius, 1)
     }
 
-    /// -1...1 per axis, y up, clamped to the ring.
+    /// -1...1 per axis, y up, clamped to the ring, with the radial dead zone applied.
     private func axes(_ s: Stick?) -> (x: Double, y: Double) {
         guard let s else { return (0, 0) }
         let dx = s.position.x - s.center.x, dy = s.position.y - s.center.y
         let length = hypot(dx, dy)
-        guard length > 0 else { return (0, 0) }
-        let scale = min(length, stickRadius) / length / stickRadius
+        let d = min(length / stickRadius, 1)
+        guard length > 0, d > deadZone else { return (0, 0) }
+        let scale = (d - deadZone) / (1 - deadZone) / length
         return (Double(dx * scale), Double(-dy * scale))
     }
 }

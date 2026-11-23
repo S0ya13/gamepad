@@ -25,10 +25,12 @@ public final class GamepadServer {
     private var lastSeq: UInt32?
     private var warned = Set<String>()
     private var lastPacketAt: UInt64 = 0
+    private var lastPongAt: UInt64 = 0
     private var released = true
     private let watchdog = DispatchSource.makeTimerSource(queue: .main)
 
     private static let silenceLimit: UInt64 = 250_000_000  // 5 missed heartbeats
+    private static let pongInterval: UInt64 = 200_000_000
 
     public init(pairing: Pairing, backend: InputBackend) {
         self.pairing = pairing
@@ -104,6 +106,10 @@ public final class GamepadServer {
         lastPacketAt = DispatchTime.now().uptimeNanoseconds
         released = false
         backend.apply(p)
+        if lastPacketAt - lastPongAt >= Self.pongInterval {
+            lastPongAt = lastPacketAt
+            conn.send(content: Data(Pong.sealed(seq: p.seq, key: key)), completion: .idempotent)
+        }
     }
 
     private func checkSilence() {

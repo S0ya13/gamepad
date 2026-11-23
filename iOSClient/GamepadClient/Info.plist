@@ -37,6 +37,8 @@
 	<array>
 		<string>_gamepad._udp</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Scans the pairing QR code shown by the Gamepad app on your Mac.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Sends gamepad input to your Mac over the local network.</string>
 	<key>UIApplicationSceneManifest</key>

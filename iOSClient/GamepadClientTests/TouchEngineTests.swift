@@ -83,6 +83,27 @@ final class TouchEngineTests: XCTestCase {
         XCTAssertEqual(engine.packet.buttons, .dpadLeft)
     }
 
+    func testDeadZoneRescalesToFullRange() {
+        engine.deadZone = 0.2
+        _ = engine.began(id(a), at: CGPoint(x: 600, y: 300))
+        _ = engine.moved(id(a), to: CGPoint(x: 615, y: 300))  // 0.15: inside
+        XCTAssertEqual(engine.packet.rx, 0)
+        _ = engine.moved(id(a), to: CGPoint(x: 660, y: 300))  // 0.6 -> (0.6 - 0.2) / 0.8
+        XCTAssertEqual(GamepadPacket.unit(engine.packet.rx), 0.5, accuracy: 1e-3)
+        _ = engine.moved(id(a), to: CGPoint(x: 600, y: 200))  // full up
+        XCTAssertEqual(engine.packet.ry, 32767)
+        XCTAssertEqual(engine.knob(engine.right!), CGPoint(x: 600, y: 200), "knob is drawn without the dead zone")
+    }
+
+    func testCustomL3Threshold() {
+        engine.l3Threshold = 0.6
+        _ = engine.began(id(a), at: CGPoint(x: 200, y: 300))
+        XCTAssertFalse(engine.moved(id(a), to: CGPoint(x: 259, y: 300)))
+        XCTAssertTrue(engine.moved(id(a), to: CGPoint(x: 261, y: 300)))
+        XCTAssertFalse(engine.moved(id(a), to: CGPoint(x: 257, y: 300)))  // 0.57: kept by hysteresis
+        XCTAssertTrue(engine.l3)
+    }
+
     func testSecondFingerInActiveStickZoneIsIgnored() {
         _ = engine.began(id(a), at: CGPoint(x: 100, y: 300))
         _ = engine.began(id(b), at: CGPoint(x: 300, y: 300))

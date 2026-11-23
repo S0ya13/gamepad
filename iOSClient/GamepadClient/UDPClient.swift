@@ -5,8 +5,10 @@ import SharedProtocol
 
 /// Sends the signed gamepad state on every change plus a 50 ms heartbeat. Main-thread API.
 final class UDPClient {
-    /// Human-readable connection status (main thread).
-    var onStatus: ((String) -> Void)?
+    /// Connection problem, or nil when the socket is up (main thread).
+    var onProblem: ((String?) -> Void)?
+    /// Round trip in ms from the Mac's acknowledgements; nil when it stops answering (main thread).
+    var onPing: ((Double?) -> Void)?
 
     private let queue = DispatchQueue(label: "udp", qos: .userInteractive)
     private var connection: NWConnection?
@@ -14,15 +16,24 @@ final class UDPClient {
     private var key: SymmetricKey?
     private var state = GamepadPacket(seq: GamepadPacket.nowMilliseconds())
     private let heartbeat = DispatchSource.makeTimerSource(queue: .main)
+    // Recent (seq, send time) pairs, to turn an acknowledged seq into a round trip.
+    private var sent = [(seq: UInt32, at: UInt64)](repeating: (0, 0), count: 256)
+    private var sentIndex = 0
+    private var lastPongAt: UInt64 = 0
+    private var linked = false
 
     init() {
         heartbeat.schedule(deadline: .now(), repeating: .milliseconds(50), leeway: .milliseconds(2))
-        heartbeat.setEventHandler { [weak self] in self?.transmit() }
+        heartbeat.setEventHandler { [weak self] in
+            self?.transmit()
+            self?.checkLink()
+        }
         heartbeat.resume()
     }
 
     /// Finds the Mac by its Bonjour name; falls back to the IP from the QR code when Bonjour is blocked.
     func connect(_ pairing: Pairing) {
+        if self.pairing != pairing { unlink() }
         self.pairing = pairing
         key = pairing.symmetricKey
         open(.service(name: pairing.name, type: bonjourServiceType, domain: "local.", interface: nil), label: pairing.name)
@@ -38,6 +49,15 @@ final class UDPClient {
     func resume() {
         guard let pairing, connection?.state != .ready else { return }
         connect(pairing)
+    }
+
+    /// The last paired Mac was removed.
+    func disconnect() {
+        connection?.cancel()
+        connection = nil
+        pairing = nil
+        key = nil
+        unlink()
     }
 
     func send(_ packet: GamepadPacket) {
@@ -59,12 +79,45 @@ final class UDPClient {
         }
         connection = c
         c.start(queue: queue)
+        receivePongs(on: c)
+    }
+
+    private func receivePongs(on c: NWConnection) {
+        c.receiveMessage { [weak self] data, _, _, error in
+            DispatchQueue.main.async {
+                guard let self, c === self.connection else { return }
+                if let data, let key = self.key, let seq = Pong.open(data, key: key) { self.pong(seq) }
+                if error == nil { self.receivePongs(on: c) }
+            }
+        }
+    }
+
+    private func pong(_ seq: UInt32) {
+        let now = DispatchTime.now().uptimeNanoseconds
+        guard let sentAt = sent.first(where: { $0.seq == seq && $0.at > 0 })?.at else { return }
+        lastPongAt = now
+        linked = true
+        onPing?(Double(now - sentAt) / 1e6)
+    }
+
+    /// The Mac answers 5 times a second; a second of silence means it no longer hears us.
+    private func checkLink() {
+        guard DispatchTime.now().uptimeNanoseconds - lastPongAt > 1_000_000_000 else { return }
+        unlink()
+    }
+
+    private func unlink() {
+        guard linked else { return }
+        linked = false
+        onPing?(nil)
     }
 
     private func transmit() {
         guard let connection, let key else { return }
         // Clock-based seq (heartbeats too): the Mac drops replays and duplicates, even across app relaunches.
         state.seq = GamepadPacket.nextSeq(after: state.seq, nowMilliseconds: GamepadPacket.nowMilliseconds())
+        sent[sentIndex] = (state.seq, DispatchTime.now().uptimeNanoseconds)
+        sentIndex = (sentIndex + 1) % sent.count
         connection.send(content: Data(state.sealed(key: key)), completion: .idempotent)
     }
 
@@ -72,12 +125,12 @@ final class UDPClient {
         guard c === connection else { return }
         switch s {
         case .ready:
-            onStatus?("→ \(label)")
+            onProblem?(nil)
         case .waiting(let error):
             // e.g. Local Network permission denied: Settings → Privacy → Local Network.
-            onStatus?("waiting: \(error.localizedDescription)")
+            onProblem?("waiting: \(error.localizedDescription)")
         case .failed(let error):
-            onStatus?("failed: \(error.localizedDescription), retrying")
+            onProblem?("failed: \(error.localizedDescription), retrying")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
                 guard let self, c === self.connection, let pairing = self.pairing else { return }
                 self.connect(pairing)

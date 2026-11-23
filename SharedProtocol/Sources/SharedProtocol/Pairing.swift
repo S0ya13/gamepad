@@ -16,13 +16,36 @@ extension GamepadPacket {
     /// Nil unless the size, version and HMAC all match (untrusted network input).
     public init?<C: Collection>(sealed bytes: C, key: SymmetricKey) where C.Element == UInt8 {
         let b = Array(bytes)
-        guard b.count == Self.sealedSize, b[0] == protocolVersion else { return nil }
-        let body = b[0 ..< 1 + Self.size]
-        let expected = Array(HMAC<SHA256>.authenticationCode(for: body, using: key)).prefix(8)
-        // Constant-time compare so timing doesn't leak how many tag bytes matched.
-        guard zip(expected, b[(1 + Self.size)...]).reduce(0, { $0 | ($1.0 ^ $1.1) }) == 0 else { return nil }
-        self.init(bytes: body.dropFirst())
+        guard b.count == Self.sealedSize, b[0] == protocolVersion,
+              tagMatches(b, bodyCount: 1 + Self.size, key: key) else { return nil }
+        self.init(bytes: b[1 ..< 1 + Self.size])
     }
+}
+
+/// Mac → phone acknowledgement: version, "P", the acknowledged seq (UInt32 LE), truncated HMAC.
+/// The phone measures ping from it and knows the Mac actually hears it.
+public enum Pong {
+    public static let size = 1 + 1 + 4 + 8
+    private static let kind: UInt8 = 0x50
+
+    public static func sealed(seq: UInt32, key: SymmetricKey) -> [UInt8] {
+        var body: [UInt8] = [protocolVersion, kind]
+        withUnsafeBytes(of: seq.littleEndian) { body.append(contentsOf: $0) }
+        return body + Array(HMAC<SHA256>.authenticationCode(for: body, using: key)).prefix(8)
+    }
+
+    /// The acknowledged seq, or nil for anything else (untrusted network input).
+    public static func open<C: Collection>(_ bytes: C, key: SymmetricKey) -> UInt32? where C.Element == UInt8 {
+        let b = Array(bytes)
+        guard b.count == size, b[0] == protocolVersion, b[1] == kind, tagMatches(b, bodyCount: 6, key: key) else { return nil }
+        return b[2 ..< 6].withUnsafeBytes { UInt32(littleEndian: $0.loadUnaligned(as: UInt32.self)) }
+    }
+}
+
+/// `b` = body + first 8 bytes of HMAC-SHA256(body). Constant-time, so timing doesn't leak how many tag bytes matched.
+private func tagMatches(_ b: [UInt8], bodyCount: Int, key: SymmetricKey) -> Bool {
+    let expected = Array(HMAC<SHA256>.authenticationCode(for: b[..<bodyCount], using: key)).prefix(8)
+    return zip(expected, b[bodyCount...]).reduce(0) { $0 | ($1.0 ^ $1.1) } == 0
 }
 
 /// What the Mac's QR code carries: `gamepad-pair://pair?k=<key>&n=<name>&h=<ip,ip>&p=<port>`.

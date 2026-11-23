@@ -25,6 +25,19 @@ final class PairingTests: XCTestCase {
         XCTAssertNil(GamepadPacket(sealed: wire.dropLast(), key: key))
     }
 
+    func testPong() {
+        let wire = Pong.sealed(seq: 0xDEADBEEF, key: key)
+        XCTAssertEqual(wire.count, 14)
+        XCTAssertEqual(Pong.open(wire, key: key), 0xDEADBEEF)
+        for i in wire.indices {
+            var bad = wire
+            bad[i] ^= 0x01
+            XCTAssertNil(Pong.open(bad, key: key), "flipped byte \(i)")
+        }
+        XCTAssertNil(Pong.open(wire, key: SymmetricKey(data: Data(repeating: 8, count: 32))))
+        XCTAssertNil(Pong.open(packet.sealed(key: key), key: key), "a gamepad packet is not a pong")
+    }
+
     func testNextSeqFollowsClockAndNeverGoesBack() {
         XCTAssertEqual(GamepadPacket.nextSeq(after: 100, nowMilliseconds: 5000), 5000)  // relaunch jumps to clock
         XCTAssertEqual(GamepadPacket.nextSeq(after: 5000, nowMilliseconds: 5000), 5001)  // burst runs ahead
