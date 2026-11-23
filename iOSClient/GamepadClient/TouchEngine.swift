@@ -40,6 +40,8 @@ final class TouchEngine {
     var deadZone: CGFloat = 0
     /// Left-stick deflection (0...1) that holds L3.
     var l3Threshold: CGFloat = 0.88
+    /// Pushing the left stick to its edge holds L3; off, L3 comes only from an L3 button.
+    var l3Push = true
     private static let l3Hysteresis: CGFloat = 0.04  // a trembling finger on the ring must not buzz the haptic
     /// Steering from tilting the phone (-1...1); replaces the left stick's X while set.
     var tilt: Double?
@@ -95,7 +97,7 @@ final class TouchEngine {
         if right?.touch == touch { right = follow(right!, to: p, time, rightSetup) }
         guard let stick = left, stick.touch == touch else { return false }
         left = follow(stick, to: p, time, leftSetup)
-        guard !stick.swipe else { return false }
+        guard !stick.swipe, l3Push else { return false }
         let wasL3 = l3
         l3 = deflection(left!) > (wasL3 ? l3Threshold - Self.l3Hysteresis : l3Threshold)
         return l3 && !wasL3

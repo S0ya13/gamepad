@@ -60,7 +60,10 @@ struct SettingsView: View {
                 Section("Sticks") {
                     slider("Size", value: $store.settings.stickRadius, in: 45...110, label: "\(Int(store.settings.stickRadius)) pt")
                     slider("Dead zone", value: $store.settings.deadZone, in: 0...0.3, label: percent(store.settings.deadZone))
-                    slider("L3 at", value: $store.settings.l3Threshold, in: 0.6...0.98, label: percent(store.settings.l3Threshold))
+                    Toggle("L3 by pushing the left stick to the edge", isOn: $store.settings.l3Push)
+                    if store.settings.l3Push {
+                        slider("L3 at", value: $store.settings.l3Threshold, in: 0.6...0.98, label: percent(store.settings.l3Threshold))
+                    }
                     slider("Camera swipe speed", value: $store.settings.swipeSpeed, in: 0.3...3, label: String(format: "%.1f×", store.settings.swipeSpeed))
                 }
                 Section {

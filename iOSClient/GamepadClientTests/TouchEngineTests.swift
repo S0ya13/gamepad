@@ -270,4 +270,12 @@ final class TouchEngineTests: XCTestCase {
         _ = engine.moved(id(a), to: CGPoint(x: 225, y: 300))
         XCTAssertEqual(GamepadPacket.unit(engine.packet.lx), 0.5, accuracy: 1e-3)
     }
+
+    func testL3PushCanBeTurnedOff() {
+        engine.l3Push = false
+        _ = engine.began(id(a), at: CGPoint(x: 200, y: 300))
+        XCTAssertFalse(engine.moved(id(a), to: CGPoint(x: 300, y: 300)), "full push, no L3 haptic")
+        XCTAssertFalse(engine.packet.buttons.contains(.l3))
+        XCTAssertEqual(engine.packet.lx, 32767)
+    }
 }

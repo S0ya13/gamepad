@@ -7,6 +7,8 @@ final class ClientStore: ObservableObject {
         var stickRadius = 55.0
         var deadZone = 0.05
         var l3Threshold = 0.88
+        /// Off by default: a stick that follows the finger sits at its edge, so L3 would hold almost always.
+        var l3Push = false
         var haptics = true
         /// Camera swipe speed multiplier.
         var swipeSpeed = 1.0
@@ -109,6 +111,7 @@ extension ClientStore.Settings {
         stickRadius = try c.decodeIfPresent(Double.self, forKey: .stickRadius) ?? d.stickRadius
         deadZone = try c.decodeIfPresent(Double.self, forKey: .deadZone) ?? d.deadZone
         l3Threshold = try c.decodeIfPresent(Double.self, forKey: .l3Threshold) ?? d.l3Threshold
+        l3Push = try c.decodeIfPresent(Bool.self, forKey: .l3Push) ?? d.l3Push
         haptics = try c.decodeIfPresent(Bool.self, forKey: .haptics) ?? d.haptics
         swipeSpeed = try c.decodeIfPresent(Double.self, forKey: .swipeSpeed) ?? d.swipeSpeed
     }

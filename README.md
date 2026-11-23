@@ -96,8 +96,9 @@ radii of it count), *Floating* (the base appears under the finger) or *Follows f
 base is dragged along when the finger runs past the ring). *Camera swipe* has no stick: the stick reads how fast the
 finger slides, like a touchpad, and returns to centre when the finger stops (speed in ⚙ → Sticks). In the editor,
 tap a stick → *Set up stick* for its mode and its own size. *Turbo* (in Style) presses a held button 10 times a second. LT/RT are analog like a pedal: the lower
-the finger in the trigger, the harder the pull (a touch at the top is a quarter). Pushing the left stick past
-88% of its radius (adjustable) holds L3 (sprint). *Duplicate* makes a profile for a new game.
+the finger in the trigger, the harder the pull (a touch at the top is a quarter). With ⚙ → Sticks → *L3 by pushing
+the left stick to the edge* on (off by default, since a following stick sits at its edge), pushing past 88% of
+its radius (adjustable) holds L3 (sprint); otherwise add an L3 button. *Duplicate* makes a profile for a new game.
 
 ## Build and sign an .ipa
 

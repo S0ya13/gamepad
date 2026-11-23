@@ -79,6 +79,7 @@ final class GamepadViewController: UIViewController {
         pad.engine.deadZone = s.deadZone
         pad.engine.swipeFullSpeed = 600 / s.swipeSpeed
         pad.engine.l3Threshold = s.l3Threshold
+        pad.engine.l3Push = s.l3Push
         pad.haptics = s.haptics
 
         let profile = store.profile
