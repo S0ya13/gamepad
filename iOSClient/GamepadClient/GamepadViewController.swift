@@ -1,4 +1,5 @@
 import Combine
+import CoreMotion
 import SharedProtocol
 import SwiftUI
 import UIKit
@@ -10,6 +11,7 @@ final class GamepadViewController: UIViewController {
     private let udp = UDPClient()
     private var connected: Pairing?
     private var observation: AnyCancellable?
+    private let motion = CMMotionManager()
 
     override func loadView() { view = pad }
 
@@ -74,6 +76,14 @@ final class GamepadViewController: UIViewController {
         pad.engine.l3Threshold = s.l3Threshold
         pad.haptics = s.haptics
 
+        let profile = store.profile
+        if pad.engine.layout != profile.controls {
+            pad.engine.layout = profile.controls
+            pad.setNeedsDisplay()
+        }
+        udp.keyMap = profile.keys
+        steer(profile.tilt)
+
         if store.active != connected {
             connected = store.active
             if let connected { udp.connect(connected) } else { udp.disconnect() }
@@ -87,6 +97,22 @@ final class GamepadViewController: UIViewController {
             statusLabel.text = "● \(mac.name) · \(Int(ping.rounded())) ms"
         } else {
             statusLabel.text = "○ \(mac.name) — \(store.problem ?? "no response")"
+        }
+    }
+
+    /// Racing: the phone's tilt replaces the left stick's X.
+    private func steer(_ on: Bool) {
+        guard motion.isDeviceMotionAvailable, on != motion.isDeviceMotionActive else { return }
+        guard on else {
+            motion.stopDeviceMotionUpdates()
+            pad.setTilt(nil)
+            return
+        }
+        motion.deviceMotionUpdateInterval = 1.0 / 100
+        motion.startDeviceMotionUpdates(to: .main) { [weak self] sample, _ in
+            guard let self, let g = sample?.gravity else { return }
+            let landscapeRight = self.view.window?.windowScene?.interfaceOrientation == .landscapeRight
+            self.pad.setTilt(TouchEngine.steering(gravityX: g.x, gravityY: g.y, landscapeRight: landscapeRight))
         }
     }
 

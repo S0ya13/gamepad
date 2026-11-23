@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-public let protocolVersion: UInt8 = 2
+public let protocolVersion: UInt8 = 3
 public let bonjourServiceType = "_gamepad._udp"
 
 extension GamepadPacket {
@@ -43,7 +43,7 @@ public enum Pong {
 }
 
 /// `b` = body + first 8 bytes of HMAC-SHA256(body). Constant-time, so timing doesn't leak how many tag bytes matched.
-private func tagMatches(_ b: [UInt8], bodyCount: Int, key: SymmetricKey) -> Bool {
+func tagMatches(_ b: [UInt8], bodyCount: Int, key: SymmetricKey) -> Bool {
     let expected = Array(HMAC<SHA256>.authenticationCode(for: b[..<bodyCount], using: key)).prefix(8)
     return zip(expected, b[bodyCount...]).reduce(0) { $0 | ($1.0 ^ $1.1) } == 0
 }

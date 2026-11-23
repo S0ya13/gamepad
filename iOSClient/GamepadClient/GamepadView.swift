@@ -11,11 +11,6 @@ final class GamepadView: UIView {
     private let haptic = UIImpactFeedbackGenerator(style: .light)
     private var lastPacket = GamepadPacket()
 
-    private static let labels: [GamepadPacket.Buttons: String] = [
-        .dpadUp: "▲", .dpadDown: "▼", .dpadLeft: "◀", .dpadRight: "▶",
-        .a: "A", .b: "B", .x: "X", .y: "Y",
-    ]
-
     override init(frame: CGRect) {
         super.init(frame: frame)
         isMultipleTouchEnabled = true
@@ -60,6 +55,13 @@ final class GamepadView: UIView {
         commit(false)
     }
 
+    /// Steering from the motion sensor; nil turns tilt off.
+    func setTilt(_ value: Double?) {
+        engine.tilt = value
+        if value == nil { setNeedsDisplay() }
+        commit(false)
+    }
+
     private func commit(_ buzz: Bool) {
         let packet = engine.packet
         if packet != lastPacket {
@@ -80,27 +82,50 @@ final class GamepadView: UIView {
         let border = UIColor(white: 1, alpha: 0.22)
         let pressed = lastPacket.buttons
 
-        for (button, frame) in engine.buttonCells() {
-            if pressed.contains(button) {
-                UIColor(white: 1, alpha: 0.28).setFill()
-                ctx.fill(frame)
-            }
-            border.setStroke()
-            ctx.stroke(frame.insetBy(dx: 0.5, dy: 0.5), width: 1)
-            drawText(Self.labels[button] ?? "", at: CGPoint(x: frame.midX, y: frame.midY), size: 28,
-                     alpha: pressed.contains(button) ? 1 : 0.6)
-        }
-
-        // Divider between the two stick zones.
-        let split = bounds.height * TouchEngine.buttonZoneFraction
+        // Divider between the two stick halves; controls drawn on top hide it.
         border.setStroke()
-        ctx.move(to: CGPoint(x: bounds.midX, y: split))
+        ctx.move(to: CGPoint(x: bounds.midX, y: 0))
         ctx.addLine(to: CGPoint(x: bounds.midX, y: bounds.maxY))
         ctx.strokePath()
 
-        let stickY = (split + bounds.maxY) / 2
-        if engine.left == nil { drawText("LS", at: CGPoint(x: bounds.width / 4, y: stickY), size: 18, alpha: 0.25) }
-        if engine.right == nil { drawText("RS", at: CGPoint(x: bounds.width * 3 / 4, y: stickY), size: 18, alpha: 0.25) }
+        let hintY = bounds.height * 0.7
+        if let tilt = engine.tilt {
+            // Steering gauge where the left stick would be.
+            let gauge = CGRect(x: bounds.width / 4 - 60, y: hintY, width: 120, height: 2)
+            border.setFill()
+            ctx.fill(gauge)
+            UIColor.white.setFill()
+            ctx.fillEllipse(in: CGRect(x: gauge.midX + tilt * 60 - 6, y: hintY - 5, width: 12, height: 12))
+            drawText("TILT", at: CGPoint(x: gauge.midX, y: hintY - 22), size: 14, alpha: 0.25)
+        } else if engine.left == nil {
+            drawText("LS", at: CGPoint(x: bounds.width / 4, y: hintY), size: 18, alpha: 0.25)
+        }
+        if engine.right == nil { drawText("RS", at: CGPoint(x: bounds.width * 3 / 4, y: hintY), size: 18, alpha: 0.25) }
+
+        for placed in engine.layout {
+            let frame = engine.frame(of: placed)
+            UIColor.black.setFill()
+            ctx.fill(frame)
+            var down = false
+            if let button = placed.control.button {
+                down = pressed.contains(button)
+                if down {
+                    UIColor(white: 1, alpha: 0.28).setFill()
+                    ctx.fill(frame)
+                }
+            } else {
+                // Trigger: filled from the top as deep as it is pulled.
+                let pull = CGFloat(placed.control == .lt ? lastPacket.lt : lastPacket.rt) / 255
+                down = pull > 0
+                UIColor(white: 1, alpha: 0.28).setFill()
+                ctx.fill(CGRect(x: frame.minX, y: frame.minY, width: frame.width, height: frame.height * pull))
+            }
+            border.setStroke()
+            ctx.stroke(frame.insetBy(dx: 0.5, dy: 0.5), width: 1)
+            let title = placed.control.title
+            let size = min(28, frame.height * 0.4, frame.width / CGFloat(max(title.count, 2)) * 1.2)
+            drawText(title, at: CGPoint(x: frame.midX, y: frame.midY), size: size, alpha: down ? 1 : 0.6)
+        }
 
         for (stick, sprint) in [(engine.left, engine.l3), (engine.right, false)] {
             guard let stick else { continue }

@@ -9,6 +9,10 @@ final class UDPClient {
     var onProblem: ((String?) -> Void)?
     /// Round trip in ms from the Mac's acknowledgements; nil when it stops answering (main thread).
     var onPing: ((Double?) -> Void)?
+    /// The game profile's keyboard keys; resent every second so a restarted Mac app gets them too.
+    var keyMap: KeyMap? {
+        didSet { if keyMap != oldValue { sendKeyMap() } }
+    }
 
     private let queue = DispatchQueue(label: "udp", qos: .userInteractive)
     private var connection: NWConnection?
@@ -21,12 +25,16 @@ final class UDPClient {
     private var sentIndex = 0
     private var lastPongAt: UInt64 = 0
     private var linked = false
+    private var ticks = 0
 
     init() {
         heartbeat.schedule(deadline: .now(), repeating: .milliseconds(50), leeway: .milliseconds(2))
         heartbeat.setEventHandler { [weak self] in
-            self?.transmit()
-            self?.checkLink()
+            guard let self else { return }
+            self.transmit()
+            self.checkLink()
+            self.ticks += 1
+            if self.ticks % 20 == 0 { self.sendKeyMap() }
         }
         heartbeat.resume()
     }
@@ -61,11 +69,9 @@ final class UDPClient {
     }
 
     func send(_ packet: GamepadPacket) {
-        state.buttons = packet.buttons
-        state.lx = packet.lx
-        state.ly = packet.ly
-        state.rx = packet.rx
-        state.ry = packet.ry
+        let seq = state.seq  // the sender owns seq; everything else comes from the touch engine
+        state = packet
+        state.seq = seq
         transmit()
     }
 
@@ -110,6 +116,11 @@ final class UDPClient {
         guard linked else { return }
         linked = false
         onPing?(nil)
+    }
+
+    private func sendKeyMap() {
+        guard let connection, let key, let keyMap else { return }
+        connection.send(content: Data(keyMap.sealed(key: key)), completion: .idempotent)
     }
 
     private func transmit() {

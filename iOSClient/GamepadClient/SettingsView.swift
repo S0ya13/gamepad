@@ -7,6 +7,7 @@ struct SettingsView: View {
     @ObservedObject var store: ClientStore
     let onDone: () -> Void
     @State private var scanning = false
+    @State private var editingLayout = false
 
     var body: some View {
         NavigationStack {
@@ -35,6 +36,24 @@ struct SettingsView: View {
                         }
                     }
                 }
+                Section {
+                    Picker("Game", selection: $store.activeProfileID) {
+                        ForEach(store.profiles) { Text($0.name).tag($0.id) }
+                    }
+                    LabeledContent("Name") {
+                        TextField("Name", text: $store.profile.name).multilineTextAlignment(.trailing)
+                    }
+                    Button("Edit layout", systemImage: "square.grid.2x2") { editingLayout = true }
+                    Toggle("Steer by tilting", isOn: $store.profile.tilt)
+                    NavigationLink("Keyboard keys") { KeyMapView(keys: $store.profile.keys) }
+                    Button("Duplicate", systemImage: "plus.square.on.square") { store.duplicateProfile() }
+                    Button("Delete profile", systemImage: "trash", role: .destructive) { store.deleteProfile() }
+                        .disabled(store.profiles.count < 2)
+                } header: {
+                    Text("Game profile")
+                } footer: {
+                    Text("Tilting the phone like a wheel replaces the left stick's left/right. Keyboard keys apply when the Mac is in Keyboard & mouse mode.")
+                }
                 Section("Sticks") {
                     slider("Size", value: $store.settings.stickRadius, in: 45...110, label: "\(Int(store.settings.stickRadius)) pt")
                     slider("Dead zone", value: $store.settings.deadZone, in: 0...0.3, label: percent(store.settings.deadZone))
@@ -47,6 +66,10 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { Button("Done", action: onDone) }
+        }
+        .fullScreenCover(isPresented: $editingLayout) {
+            LayoutEditor(controls: $store.profile.controls) { editingLayout = false }
+                .preferredColorScheme(.dark)
         }
         .fullScreenCover(isPresented: $scanning) {
             QRScanner { pairing in
@@ -66,6 +89,41 @@ struct SettingsView: View {
     }
 
     private func percent(_ v: Double) -> String { "\(Int((v * 100).rounded()))%" }
+}
+
+/// Keyboard & mouse mode on the Mac: what each control and stick presses for this game.
+private struct KeyMapView: View {
+    @Binding var keys: KeyMap
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("Left stick", selection: $keys.leftStick) {
+                    ForEach(KeyMap.Stick.allCases, id: \.self) { Text($0.title) }
+                }
+                Picker("Right stick", selection: $keys.rightStick) {
+                    ForEach(KeyMap.Stick.allCases, id: \.self) { Text($0.title) }
+                }
+            } footer: {
+                Text("Used when the Mac is in Keyboard & mouse mode. Gamepad modes send the real controls.")
+            }
+            Section("Buttons") {
+                ForEach(Control.allCases, id: \.self) { control in
+                    Picker(control.title, selection: key(for: control)) {
+                        Text("Nothing").tag("")
+                        ForEach(KeyMap.keyNames, id: \.self) { Text($0).tag($0) }
+                    }
+                    .pickerStyle(.navigationLink)
+                }
+            }
+            Button("Reset to defaults") { keys = .standard }
+        }
+        .navigationTitle("Keyboard keys")
+    }
+
+    private func key(for control: Control) -> Binding<String> {
+        Binding(get: { keys.keys[control] ?? "" }, set: { keys.keys[control] = $0.isEmpty ? nil : $0 })
+    }
 }
 
 /// Live camera scanner for the Mac's pairing QR code; falls back to a hint where VisionKit can't scan.

@@ -9,6 +9,7 @@ public final class OJDBackend: InputBackend {
     private static let buttons: [(GamepadPacket.Buttons, String)] = [
         (.a, "South"), (.b, "East"), (.x, "West"), (.y, "North"),
         (.l3, "LeftStickClick"), (.r3, "RightStickClick"),
+        (.lb, "LeftShoulder"), (.rb, "RightShoulder"), (.start, "Start"), (.back, "Back"),
     ]
     private static let dpad: [(GamepadPacket.Buttons, String)] = [
         (.dpadUp, "DpadUp"), (.dpadDown, "DpadDown"), (.dpadLeft, "DpadLeft"), (.dpadRight, "DpadRight"),
@@ -67,7 +68,7 @@ public final class OJDBackend: InputBackend {
         try? stdin.fileHandleForWriting.write(contentsOf: Data((line + "\n").utf8))
     }
 
-    /// One `ojd virtual feed` line. OJD sticks are -1...1 with Y down; ours are Y up.
+    /// One `ojd virtual feed` line. OJD sticks are -1...1 with Y down (ours are Y up), triggers 0...1.
     static func frame(for p: GamepadPacket) -> String {
         func names(_ table: [(GamepadPacket.Buttons, String)]) -> String {
             table.filter { p.buttons.contains($0.0) }.map { "\"\($0.1)\"" }.joined(separator: ",")
@@ -75,8 +76,10 @@ public final class OJDBackend: InputBackend {
         func axis(_ raw: Int16, flip: Bool = false) -> String {
             String(format: "%.4f", (flip ? -1 : 1) * GamepadPacket.unit(raw))
         }
+        func trigger(_ raw: UInt8) -> String { String(format: "%.4f", Double(raw) / 255) }
         return "{\"buttons\":[\(names(buttons))],\"dpad\":[\(names(dpad))],\"axes\":{"
             + "\"LeftStickX\":\(axis(p.lx)),\"LeftStickY\":\(axis(p.ly, flip: true)),"
-            + "\"RightStickX\":\(axis(p.rx)),\"RightStickY\":\(axis(p.ry, flip: true))}}"
+            + "\"RightStickX\":\(axis(p.rx)),\"RightStickY\":\(axis(p.ry, flip: true)),"
+            + "\"LeftTrigger\":\(trigger(p.lt)),\"RightTrigger\":\(trigger(p.rt))}}"
     }
 }

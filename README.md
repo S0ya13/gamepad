@@ -31,8 +31,9 @@ packet with the shared key; the server ignores anything unsigned. `--pair` shows
 Keyboard/mouse mode needs permission to press keys for the app you run it from
 (System Settings → Privacy & Security → Device Control and Data Access; Accessibility before macOS 27). Allow incoming connections if the firewall asks.
 
-Mapping: left stick → W/A/S/D, L3 → Shift, right stick → mouse,
-A → Space, B → F, X → R, Y → E, D-pad ↑↓←→ → 1/2/3/4 (edit `CGEventBackend.buttonKeys`).
+Keys come from the game profile on the iPhone (⚙ → Keyboard keys); the phone resends them every second.
+Default: left stick → W/A/S/D, right stick → mouse, A Space, B F, X R, Y E, D-pad 1/2/3/4, LB Q, RB G,
+LT right click, RT left click (from a quarter pull), L3 Shift, R3 V, Start Escape, Back Tab.
 
 All keys are released after 250 ms without packets and on Ctrl+C.
 
@@ -47,7 +48,7 @@ swift run -c release MacServer --ojd sdl   # Steam, SDL games, emulators (Xbox-s
 swift run -c release MacServer --ojd gc    # games using Apple GameController
 ```
 
-A/B/X/Y → South/East/West/North, L3 → left stick click.
+A/B/X/Y → South/East/West/North, LB/RB → shoulders, LT/RT → analog triggers, Start/Back, L3/R3 → stick clicks.
 
 ## iOS client
 
@@ -70,8 +71,18 @@ Allow Local Network access on first launch. The line next to ⚙ shows the Mac a
 ⚙ also holds the list of paired Macs (tap to switch, swipe to delete), stick size, dead zone,
 the L3 threshold and vibration. Settings are stored on the phone.
 
-Layout (landscape): top 40% are buttons (left 2×2: ◀ ▲ / ▼ ▶, right 2×2: X Y / A B),
-bottom 60% are floating sticks. Pushing the left stick past 88% of its radius (adjustable) holds L3 (sprint).
+Game profiles (⚙ → Game profile) hold the layout, tilt steering and keyboard keys for one game.
+Two come built in:
+
+- **Standard**: top 40% are buttons (left 2×2: ◀ ▲ / ▼ ▶, right 2×2: X Y / A B), the rest are floating sticks.
+- **Racing**: LB X Y A B RB along the top, LT (brake) and RT (gas) as tall pedals on the sides,
+  steering by tilting the phone like a wheel (45° = full lock).
+
+*Edit layout* opens a full-screen editor: add any control (A B X Y, D-pad, LB RB LT RT, L3 R3, Start, Back),
+drag to move, drag the round handle to resize; positions snap to 1/40 of the screen. Empty space is always
+the floating sticks: left half left stick, right half right stick. LT/RT are analog like a pedal: the lower
+the finger in the trigger, the harder the pull (a touch at the top is a quarter). Pushing the left stick past
+88% of its radius (adjustable) holds L3 (sprint). *Duplicate* makes a profile for a new game.
 
 ## Build and sign an .ipa
 

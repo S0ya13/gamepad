@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import SharedProtocol
 
 /// Pure multitouch logic: touch ids + points in, GamepadPacket out. No UIKit, so it is unit-testable.
@@ -11,42 +12,54 @@ final class TouchEngine {
         var position: CGPoint
     }
 
-    static let buttonZoneFraction: CGFloat = 0.4
-    /// D-pad / ABXY diamonds rotated 45° into a 2×2 grid: top-left, top-right, bottom-left, bottom-right.
-    static let leftGrid: [Buttons] = [.dpadLeft, .dpadUp, .dpadDown, .dpadRight]
-    static let rightGrid: [Buttons] = [.x, .y, .a, .b]
-
     var size: CGSize = .zero
+    /// The profile's controls; a touch anywhere else is a floating stick (left or right half). Later ones are on top.
+    var layout: [Profile.Placed] = []
     var stickRadius: CGFloat = 70
     /// Deflection (0...1) below which the stick reads 0; the rest is rescaled so full deflection still gives 1.
     var deadZone: CGFloat = 0
     /// Left-stick deflection (0...1) that holds L3.
     var l3Threshold: CGFloat = 0.88
     private static let l3Hysteresis: CGFloat = 0.04  // a trembling finger on the ring must not buzz the haptic
+    /// Steering from tilting the phone (-1...1); replaces the left stick's X while set.
+    var tilt: Double?
+    /// Phone rotation that gives full lock.
+    static let steeringLock = Double.pi / 4
 
     private(set) var left: Stick?
     private(set) var right: Stick?
     private(set) var l3 = false
-    private var buttonTouches: [ObjectIdentifier: Buttons] = [:]
+    private var buttonTouches: [ObjectIdentifier: Control] = [:]
+    private var triggerTouches: [ObjectIdentifier: (control: Control, frame: CGRect, pull: Double)] = [:]
 
-    /// Returns true when a button went down (caller fires the haptic).
+    /// Returns true when a control went down (caller fires the haptic).
     func began(_ touch: ObjectIdentifier, at p: CGPoint) -> Bool {
-        let isLeft = p.x < size.width / 2
-        guard p.y < size.height * Self.buttonZoneFraction else {
-            // Floating stick; a second finger in an already active stick zone is ignored.
-            let stick = Stick(touch: touch, center: p, position: p)
-            if isLeft, left == nil { left = stick } else if !isLeft, right == nil { right = stick }
-            return false
+        if let hit = layout.last(where: { contains(frame(of: $0), p) }) {
+            let f = frame(of: hit)
+            if hit.control.button == nil {
+                triggerTouches[touch] = (hit.control, f, Self.pull(at: p, in: f))
+            } else {
+                buttonTouches[touch] = hit.control
+            }
+            return true
         }
-        let col = p.x - (isLeft ? 0 : size.width / 2) < size.width / 4 ? 0 : 1
-        let row = p.y < size.height * Self.buttonZoneFraction / 2 ? 0 : 1
-        buttonTouches[touch] = (isLeft ? Self.leftGrid : Self.rightGrid)[row * 2 + col]
-        return true
+        // Floating stick; a second finger in an already active stick zone is ignored.
+        let stick = Stick(touch: touch, center: p, position: p)
+        if p.x < size.width / 2 {
+            if left == nil { left = stick }
+        } else if right == nil {
+            right = stick
+        }
+        return false
     }
 
     /// Returns true when the left stick crosses the L3 ring outward (caller fires the haptic).
-    /// A touch stays bound to the stick/button it began on, wherever it moves (pointer capture).
+    /// A touch stays bound to the stick/button/trigger it began on, wherever it moves (pointer capture).
     func moved(_ touch: ObjectIdentifier, to p: CGPoint) -> Bool {
+        if var t = triggerTouches[touch] {
+            t.pull = Self.pull(at: p, in: t.frame)
+            triggerTouches[touch] = t
+        }
         if right?.touch == touch { right?.position = p }
         guard let stick = left, stick.touch == touch else { return false }
         left?.position = p
@@ -59,16 +72,24 @@ final class TouchEngine {
         if left?.touch == touch { left = nil; l3 = false }
         if right?.touch == touch { right = nil }
         buttonTouches[touch] = nil
+        triggerTouches[touch] = nil
     }
 
     /// Current state; `seq` is filled in by the sender.
     var packet: GamepadPacket {
-        var buttons = buttonTouches.values.reduce(into: Buttons()) { $0.formUnion($1) }
+        var buttons = buttonTouches.values.reduce(into: Buttons()) { $0.formUnion($1.button ?? []) }
         if l3 { buttons.insert(.l3) }
         let l = axes(left), r = axes(right)
         return GamepadPacket(buttons: buttons,
-                             lx: GamepadPacket.axis(l.x), ly: GamepadPacket.axis(l.y),
-                             rx: GamepadPacket.axis(r.x), ry: GamepadPacket.axis(r.y))
+                             lx: GamepadPacket.axis(tilt ?? l.x), ly: GamepadPacket.axis(l.y),
+                             rx: GamepadPacket.axis(r.x), ry: GamepadPacket.axis(r.y),
+                             lt: GamepadPacket.trigger(pull(.lt)), rt: GamepadPacket.trigger(pull(.rt)))
+    }
+
+    /// A control's rectangle in points.
+    func frame(of placed: Profile.Placed) -> CGRect {
+        CGRect(x: placed.frame.minX * size.width, y: placed.frame.minY * size.height,
+               width: placed.frame.width * size.width, height: placed.frame.height * size.height)
     }
 
     /// Finger position clamped to the ring (drawn as is, without the dead zone).
@@ -79,13 +100,26 @@ final class TouchEngine {
         return CGPoint(x: s.center.x + dx / length * stickRadius, y: s.center.y + dy / length * stickRadius)
     }
 
-    /// Same grid as `began` hit-testing, for drawing.
-    func buttonCells() -> [(Buttons, CGRect)] {
-        let w = size.width / 4, h = size.height * Self.buttonZoneFraction / 2
-        return (Self.leftGrid + Self.rightGrid).enumerated().map { i, button in
-            let half = i / 4, cell = i % 4
-            return (button, CGRect(x: CGFloat(half * 2 + cell % 2) * w, y: CGFloat(cell / 2) * h, width: w, height: h))
-        }
+    /// Steering from gravity in device coordinates: turning the phone clockwise (like a wheel) steers right.
+    static func steering(gravityX gx: Double, gravityY gy: Double, landscapeRight: Bool) -> Double {
+        // landscapeRight: the phone's top points left, so gravity is -x when level; landscapeLeft: +x.
+        let angle = landscapeRight ? atan2(-gy, -gx) : atan2(gy, gx)
+        return min(max(angle / steeringLock, -1), 1)
+    }
+
+    /// Edges count, so a touch on the line between two cells still hits (the later one).
+    private func contains(_ r: CGRect, _ p: CGPoint) -> Bool {
+        p.x >= r.minX && p.x <= r.maxX && p.y >= r.minY && p.y <= r.maxY
+    }
+
+    /// Like a pedal: the lower the finger in the trigger, the harder the pull. A touch at the top still
+    /// gives a quarter, so a quick tap counts as pressed in any game.
+    private static func pull(at p: CGPoint, in f: CGRect) -> Double {
+        0.25 + 0.75 * min(max((p.y - f.minY) / f.height, 0), 1)
+    }
+
+    private func pull(_ trigger: Control) -> Double {
+        triggerTouches.values.filter { $0.control == trigger }.map(\.pull).max() ?? 0
     }
 
     private func deflection(_ s: Stick) -> CGFloat {

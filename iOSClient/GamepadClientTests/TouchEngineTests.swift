@@ -11,6 +11,7 @@ final class TouchEngineTests: XCTestCase {
         engine = TouchEngine()
         engine.size = CGSize(width: 800, height: 400)
         engine.stickRadius = 100
+        engine.layout = Profile.standard.controls
     }
 
     private func id(_ o: NSObject) -> ObjectIdentifier { ObjectIdentifier(o) }
@@ -102,6 +103,53 @@ final class TouchEngineTests: XCTestCase {
         XCTAssertTrue(engine.moved(id(a), to: CGPoint(x: 261, y: 300)))
         XCTAssertFalse(engine.moved(id(a), to: CGPoint(x: 257, y: 300)))  // 0.57: kept by hysteresis
         XCTAssertTrue(engine.l3)
+    }
+
+    func testTriggerIsAnalogByFingerDepthAndKeepsCapture() {
+        // A trigger 200 pt tall on the right; the standard grid is gone.
+        engine.layout = [Profile.Placed(control: .rt, frame: CGRect(x: 0.75, y: 0.5, width: 0.25, height: 0.5))]
+        XCTAssertTrue(engine.began(id(a), at: CGPoint(x: 700, y: 200)))   // top edge: a quarter
+        XCTAssertEqual(engine.packet.rt, GamepadPacket.trigger(0.25))
+        _ = engine.moved(id(a), to: CGPoint(x: 700, y: 300))              // halfway down
+        XCTAssertEqual(engine.packet.rt, GamepadPacket.trigger(0.625))
+        _ = engine.moved(id(a), to: CGPoint(x: 100, y: 900))              // dragged far away: still the trigger, full
+        XCTAssertEqual(engine.packet.rt, 255)
+        XCTAssertEqual(engine.packet.lt, 0)
+        XCTAssertNil(engine.left, "a trigger finger never becomes a stick")
+        engine.ended(id(a))
+        XCTAssertEqual(engine.packet, GamepadPacket())
+    }
+
+    func testNewButtonsAndTopmostControlWins() {
+        engine.layout = [
+            Profile.Placed(control: .lb, frame: CGRect(x: 0, y: 0, width: 0.5, height: 0.5)),
+            Profile.Placed(control: .start, frame: CGRect(x: 0.25, y: 0.25, width: 0.25, height: 0.25)),
+        ]
+        _ = engine.began(id(a), at: CGPoint(x: 50, y: 50))
+        _ = engine.began(id(b), at: CGPoint(x: 300, y: 150))  // overlap: Start is on top
+        XCTAssertEqual(engine.packet.buttons, [.lb, .start])
+        XCTAssertFalse(engine.began(id(c), at: CGPoint(x: 100, y: 300)), "empty space is a stick")
+        XCTAssertNotNil(engine.left)
+    }
+
+    func testTiltReplacesLeftStickX() {
+        _ = engine.began(id(a), at: CGPoint(x: 200, y: 300))
+        _ = engine.moved(id(a), to: CGPoint(x: 150, y: 250))  // left and up
+        engine.tilt = 0.5
+        XCTAssertEqual(GamepadPacket.unit(engine.packet.lx), 0.5, accuracy: 1e-3)
+        XCTAssertEqual(GamepadPacket.unit(engine.packet.ly), 0.5, accuracy: 1e-3, "Y still from the stick")
+    }
+
+    func testSteeringFromGravity() {
+        let s = Double.pi / 8, c = cos(s), sn = sin(s)  // 22.5° = half lock
+        // landscapeRight: level phone has gravity -x; turned clockwise it rotates toward -y.
+        XCTAssertEqual(TouchEngine.steering(gravityX: -1, gravityY: 0, landscapeRight: true), 0, accuracy: 1e-9)
+        XCTAssertEqual(TouchEngine.steering(gravityX: -c, gravityY: -sn, landscapeRight: true), 0.5, accuracy: 1e-9)
+        XCTAssertEqual(TouchEngine.steering(gravityX: -c, gravityY: sn, landscapeRight: true), -0.5, accuracy: 1e-9)
+        // landscapeLeft: level is +x; clockwise rotates toward +y.
+        XCTAssertEqual(TouchEngine.steering(gravityX: c, gravityY: sn, landscapeRight: false), 0.5, accuracy: 1e-9)
+        // Upright portrait (turned a full 90° clockwise from landscapeRight): clamped to full lock.
+        XCTAssertEqual(TouchEngine.steering(gravityX: 0, gravityY: -1, landscapeRight: true), 1)
     }
 
     func testSecondFingerInActiveStickZoneIsIgnored() {

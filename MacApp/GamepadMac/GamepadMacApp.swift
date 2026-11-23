@@ -53,8 +53,8 @@ struct MenuView: View {
                     Text("Mouse speed: \(Int(model.sensitivity))").font(.callout)
                     Slider(value: $model.sensitivity, in: 3 ... 60, step: 1)
                 }
-                Text("Left stick → W A S D · L3 → Shift · Right stick → mouse\nA Space · B F · X R · Y E · D-pad 1 2 3 4")
-                    .font(.caption).foregroundStyle(.secondary)
+                Text("Keys for each game are set on the iPhone: ⚙ → Keyboard keys.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             case .gamepadSDL, .gamepadGC:
                 Text("Analog sticks through OpenJoystickDriver. It must be running with Input Monitoring allowed.")
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)

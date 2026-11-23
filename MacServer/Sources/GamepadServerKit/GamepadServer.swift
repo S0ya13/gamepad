@@ -8,6 +8,7 @@ public final class GamepadServer {
     /// Swapping it releases everything the previous backend held.
     public var backend: InputBackend {
         willSet { backend.reset() }
+        didSet { keyMap.map(backend.use) }
     }
     /// The phone's address when it starts sending, nil when it goes silent.
     public var onClient: ((String?) -> Void)?
@@ -27,6 +28,7 @@ public final class GamepadServer {
     private var lastPacketAt: UInt64 = 0
     private var lastPongAt: UInt64 = 0
     private var released = true
+    private var keyMap: KeyMap?
     private let watchdog = DispatchSource.makeTimerSource(queue: .main)
 
     private static let silenceLimit: UInt64 = 250_000_000  // 5 missed heartbeats
@@ -83,12 +85,15 @@ public final class GamepadServer {
     private func receive(on conn: NWConnection) {
         conn.receiveMessage { [weak self] data, _, _, error in
             guard let self else { return }
-            guard let data, let p = GamepadPacket(sealed: data, key: self.key) else {
+            if let data, data.count != GamepadPacket.sealedSize, let map = KeyMap(sealed: data, key: self.key) {
+                self.handle(map, from: conn)
+            } else if let data, let p = GamepadPacket(sealed: data, key: self.key) {
+                self.handle(p, from: conn)
+            } else {
                 if data != nil, self.warned.insert("\(conn.endpoint)").inserted { self.onRejected?("\(conn.endpoint)") }
                 conn.cancel()
                 return
             }
-            self.handle(p, from: conn)
             if error == nil { self.receive(on: conn) }
         }
     }
@@ -110,6 +115,13 @@ public final class GamepadServer {
             lastPongAt = lastPacketAt
             conn.send(content: Data(Pong.sealed(seq: p.seq, key: key)), completion: .idempotent)
         }
+    }
+
+    /// The phone repeats its mapping every second; only the playing phone's counts.
+    private func handle(_ map: KeyMap, from conn: NWConnection) {
+        guard conn === active, map != keyMap else { return }
+        keyMap = map
+        backend.use(map)
     }
 
     private func checkSilence() {

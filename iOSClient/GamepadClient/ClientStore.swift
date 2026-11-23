@@ -17,6 +17,13 @@ final class ClientStore: ObservableObject {
     @Published private(set) var pairings: [Pairing] {
         didSet { save(pairings, as: "pairings") }
     }
+    /// Game profiles: layout, tilt and keyboard keys each.
+    @Published var profiles: [Profile] {
+        didSet { save(profiles, as: "profiles") }
+    }
+    @Published var activeProfileID: UUID {
+        didSet { UserDefaults.standard.set(activeProfileID.uuidString, forKey: "activeProfile") }
+    }
     @Published var activeName: String? {
         didSet { UserDefaults.standard.set(activeName, forKey: "activeName") }
     }
@@ -27,10 +34,38 @@ final class ClientStore: ObservableObject {
 
     var active: Pairing? { pairings.first { $0.name == activeName } ?? pairings.first }
 
+    /// The selected game profile; editing it saves it.
+    var profile: Profile {
+        get { profiles.first { $0.id == activeProfileID } ?? profiles[0] }
+        set {
+            guard let i = profiles.firstIndex(where: { $0.id == newValue.id }) else { return }
+            profiles[i] = newValue
+        }
+    }
+
     init() {
         settings = Self.load("settings") ?? Settings()
         pairings = Self.load("pairings") ?? []
         activeName = UserDefaults.standard.string(forKey: "activeName")
+        let saved: [Profile] = Self.load("profiles") ?? []
+        let profiles = saved.isEmpty ? [.standard, .racing] : saved
+        self.profiles = profiles
+        activeProfileID = UserDefaults.standard.string(forKey: "activeProfile").flatMap(UUID.init) ?? profiles[0].id
+    }
+
+    /// A copy of the current profile becomes the current one, so a new game starts from a working layout.
+    func duplicateProfile() {
+        var copy = profile
+        copy.id = UUID()
+        copy.name += " copy"
+        profiles.append(copy)
+        activeProfileID = copy.id
+    }
+
+    func deleteProfile() {
+        guard profiles.count > 1 else { return }
+        profiles.removeAll { $0.id == profile.id }
+        activeProfileID = profiles[0].id
     }
 
     /// Re-pairing the same Mac replaces its old key.

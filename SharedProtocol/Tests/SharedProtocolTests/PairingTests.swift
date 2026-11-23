@@ -8,8 +8,8 @@ final class PairingTests: XCTestCase {
 
     func testSealedRoundTrip() {
         let wire = packet.sealed(key: key)
-        XCTAssertEqual(wire.count, 23)
-        XCTAssertEqual(wire[0], 2)
+        XCTAssertEqual(wire.count, 25)
+        XCTAssertEqual(wire[0], 3)
         XCTAssertEqual(GamepadPacket(sealed: wire, key: key), packet)
     }
 
@@ -23,6 +23,25 @@ final class PairingTests: XCTestCase {
         XCTAssertNil(GamepadPacket(sealed: wire, key: SymmetricKey(data: Data(repeating: 8, count: 32))))
         XCTAssertNil(GamepadPacket(sealed: packet.encoded(), key: key), "unsigned v1 packet")
         XCTAssertNil(GamepadPacket(sealed: wire.dropLast(), key: key))
+    }
+
+    func testKeyMap() throws {
+        var map = KeyMap.standard
+        map.keys[.lt] = nil
+        map.rightStick = .arrows
+        let wire = map.sealed(key: key)
+        XCTAssertGreaterThan(wire.count, GamepadPacket.sealedSize, "the Mac tells them apart by size")
+        XCTAssertEqual(KeyMap(sealed: wire, key: key), map)
+        for i in [0, 1, 2, wire.count / 2, wire.count - 1] {
+            var bad = wire
+            bad[i] ^= 0x01
+            XCTAssertNil(KeyMap(sealed: bad, key: key), "flipped byte \(i)")
+        }
+        XCTAssertNil(KeyMap(sealed: wire, key: SymmetricKey(data: Data(repeating: 8, count: 32))))
+        XCTAssertNil(KeyMap(sealed: packet.sealed(key: key), key: key), "a gamepad packet is not a key map")
+        // Readable JSON object keyed by control name (CodingKeyRepresentable), not a flat array.
+        let json = String(decoding: wire[2 ..< wire.count - 8], as: UTF8.self)
+        XCTAssertTrue(json.contains(#""a":"Space""#), json)
     }
 
     func testPong() {
