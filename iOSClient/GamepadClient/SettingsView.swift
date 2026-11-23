@@ -44,6 +44,9 @@ struct SettingsView: View {
                         TextField("Name", text: $store.profile.name).multilineTextAlignment(.trailing)
                     }
                     Button("Edit layout, buttons and sticks", systemImage: "square.grid.2x2") { editingLayout = true }
+                    Picker("Theme", selection: $store.profile.theme) {
+                        ForEach(Profile.Theme.allCases, id: \.self) { Text($0.title) }
+                    }
                     Toggle("Steer by tilting", isOn: $store.profile.tilt)
                     NavigationLink("Keyboard keys") { KeyMapView(keys: $store.profile.keys) }
                     Button("Duplicate", systemImage: "plus.square.on.square") { store.duplicateProfile() }

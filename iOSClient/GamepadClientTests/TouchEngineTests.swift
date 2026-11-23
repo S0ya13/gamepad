@@ -219,5 +219,12 @@ final class TouchEngineTests: XCTestCase {
     func testHexColorRoundTrip() {
         XCTAssertEqual(UIColor(hex: "#FF8000")?.hex, "#FF8000")
         XCTAssertNil(UIColor(hex: "red"))
+
+        var a = Profile.Placed(control: .a, frame: .zero)
+        XCTAssertEqual(a.uiColor(.mono).hex, "#FFFFFF", "Mono leaves face buttons plain")
+        XCTAssertEqual(a.uiColor(.neon).hex, "#39FF88")
+        XCTAssertEqual(Profile.Placed(control: .lb, frame: .zero).uiColor(.neon).hex, "#3DF5FF", "other buttons take the accent")
+        a.color = "#123456"
+        XCTAssertEqual(a.uiColor(.neon).hex, "#123456", "the button's own colour wins")
     }
 }

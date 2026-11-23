@@ -15,7 +15,7 @@ struct LayoutEditor: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
-                Color.black.onTapGesture { select(nil) }
+                Color(uiColor: profile.theme.background).onTapGesture { select(nil) }
                 Rectangle().fill(.white.opacity(0.2))
                     .frame(width: 1, height: geo.size.height)
                     .offset(x: geo.size.width / 2)
@@ -30,7 +30,7 @@ struct LayoutEditor: View {
                 EditableStick(setup: $profile.rightStick, left: false, radius: stickRadius, canvas: geo.size,
                               selected: selectedStick == false) { select(nil, stick: false) }
                 ForEach($profile.controls) { $placed in
-                    EditableControl(placed: $placed, canvas: geo.size, selected: selected == placed.id) {
+                    EditableControl(placed: $placed, theme: profile.theme, canvas: geo.size, selected: selected == placed.id) {
                         select(placed.id)
                     }
                 }
@@ -40,7 +40,7 @@ struct LayoutEditor: View {
         .overlay(alignment: .bottom) { toolbar.padding(.bottom, 8) }
         .sheet(isPresented: $styling) {
             if let index = profile.controls.firstIndex(where: { $0.id == selected }) {
-                ButtonSetup(placed: $profile.controls[index]) { styling = false }
+                ButtonSetup(placed: $profile.controls[index], theme: profile.theme) { styling = false }
                     .preferredColorScheme(.dark)
             }
         }
@@ -173,6 +173,7 @@ private struct EditableStick: View {
 
 private struct EditableControl: View {
     @Binding var placed: Profile.Placed
+    let theme: Profile.Theme
     let canvas: CGSize
     let selected: Bool
     let onSelect: () -> Void
@@ -181,7 +182,7 @@ private struct EditableControl: View {
     var body: some View {
         let f = placed.frame
         let width = f.width * canvas.width, height = f.height * canvas.height
-        let color = Color(uiColor: placed.uiColor)
+        let color = Color(uiColor: placed.uiColor(theme))
         let outline = placed.shape.outline(width: width, height: height)
         ZStack(alignment: .bottomTrailing) {
             outline
@@ -230,6 +231,7 @@ private struct EditableControl: View {
 /// One button's look and behaviour.
 private struct ButtonSetup: View {
     @Binding var placed: Profile.Placed
+    let theme: Profile.Theme
     let onDone: () -> Void
 
     var body: some View {
@@ -247,7 +249,7 @@ private struct ButtonSetup: View {
                 }
                 .pickerStyle(.segmented)
                 ColorPicker("Color", selection: Binding(
-                    get: { Color(uiColor: placed.uiColor) },
+                    get: { Color(uiColor: placed.uiColor(theme)) },
                     set: { placed.color = UIColor($0).hex }), supportsOpacity: false)
                 if placed.color != nil {
                     Button("Default colour") { placed.color = nil }

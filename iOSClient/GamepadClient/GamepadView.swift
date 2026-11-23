@@ -7,6 +7,12 @@ final class GamepadView: UIView {
     /// Called on every state change, before redraw.
     var onChange: ((GamepadPacket) -> Void)?
     var haptics = true
+    var theme = Profile.Theme.midnight {
+        didSet {
+            backgroundColor = theme.background
+            setNeedsDisplay()
+        }
+    }
 
     private let haptic = UIImpactFeedbackGenerator(style: .light)
     private var lastPacket = GamepadPacket()
@@ -14,7 +20,7 @@ final class GamepadView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         isMultipleTouchEnabled = true
-        backgroundColor = UIColor(red: 0.035, green: 0.04, blue: 0.055, alpha: 1)
+        backgroundColor = theme.background
         contentMode = .redraw
         haptic.prepare()
     }
@@ -91,15 +97,17 @@ final class GamepadView: UIView {
             ctx.fillEllipse(in: CGRect(x: gauge.midX + tilt * 60 - 6, y: rest.y - 5, width: 12, height: 12))
             drawText("TILT", at: CGPoint(x: gauge.midX, y: rest.y - 22), size: 14, alpha: 0.25)
         } else if engine.left == nil {
-            drawStick(center: engine.rest(engine.leftSetup), knob: engine.rest(engine.leftSetup), active: false, in: ctx)
+            drawStick(center: engine.rest(engine.leftSetup), knob: engine.rest(engine.leftSetup), active: false,
+                      color: theme.stick, in: ctx)
         }
         if engine.right == nil {
-            drawStick(center: engine.rest(engine.rightSetup), knob: engine.rest(engine.rightSetup), active: false, in: ctx)
+            drawStick(center: engine.rest(engine.rightSetup), knob: engine.rest(engine.rightSetup), active: false,
+                      color: theme.stick, in: ctx)
         }
 
         for placed in engine.layout {
             let frame = engine.frame(of: placed)
-            let color = placed.uiColor
+            let color = placed.uiColor(theme)
             // 0 idle ... 1 fully down; triggers are analog.
             let level = placed.control.button.map { pressed.contains($0) ? 1 : 0 }
                 ?? CGFloat(placed.control == .lt ? lastPacket.lt : lastPacket.rt) / 255
@@ -133,12 +141,12 @@ final class GamepadView: UIView {
         for (stick, sprint) in [(engine.left, engine.l3), (engine.right, false)] {
             guard let stick else { continue }
             drawStick(center: stick.center, knob: engine.knob(stick), active: true,
-                      color: sprint ? .systemOrange : .white, in: ctx)
+                      color: sprint ? .systemOrange : theme.stick, in: ctx)
         }
     }
 
     /// Base and knob; at rest they are drawn faint where the stick lives.
-    private func drawStick(center: CGPoint, knob: CGPoint, active: Bool, color: UIColor = .white, in ctx: CGContext) {
+    private func drawStick(center: CGPoint, knob: CGPoint, active: Bool, color: UIColor, in ctx: CGContext) {
         let r = engine.stickRadius
         let base = CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)
         color.withAlphaComponent(active ? 0.08 : 0.03).setFill()

@@ -77,7 +77,8 @@ Allow Local Network access on first launch. The line next to ⚙ shows the Mac a
 ⚙ also holds the list of paired Macs (tap to switch, swipe to delete), stick size, dead zone,
 the L3 threshold and vibration. Settings are stored on the phone.
 
-Game profiles (⚙ → Game profile) hold the layout, tilt steering and keyboard keys for one game.
+Game profiles (⚙ → Game profile) hold the layout, theme, tilt steering and keyboard keys for one game.
+Themes: Midnight, Black (saves battery on OLED), Neon, Sunset, Mono; a button's own colour (Style) wins over the theme.
 Three come built in (phones updated from an older build get Controller added once):
 
 - **Controller**: laid out like a real pad: LT LB / Back Start / RB RT along the top, a D-pad cross on the

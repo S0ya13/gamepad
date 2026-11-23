@@ -88,6 +88,7 @@ final class GamepadViewController: UIViewController {
             pad.engine.rightSetup = profile.rightStick
             pad.setNeedsDisplay()
         }
+        if pad.theme != profile.theme { pad.theme = profile.theme }
         udp.keyMap = profile.keys
         steer(profile.tilt)
 

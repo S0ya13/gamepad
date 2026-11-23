@@ -51,6 +51,7 @@ struct Profile: Codable, Equatable, Identifiable {
     var keys = KeyMap.standard
     var leftStick = StickSetup.left
     var rightStick = StickSetup.right
+    var theme = Theme.midnight
 
     /// The original layout: D-pad and ABXY as 2×2 grids over the top 40%, floating sticks below.
     static let standard = Profile(name: "Standard", controls: grid([.left, .up, .down, .right], x: 0)
@@ -113,6 +114,7 @@ extension Profile {
         keys = try c.decodeIfPresent(KeyMap.self, forKey: .keys) ?? .standard
         leftStick = try c.decodeIfPresent(StickSetup.self, forKey: .leftStick) ?? .left
         rightStick = try c.decodeIfPresent(StickSetup.self, forKey: .rightStick) ?? .right
+        theme = try c.decodeIfPresent(Theme.self, forKey: .theme) ?? .midnight
     }
 }
 
@@ -128,13 +130,65 @@ extension Profile.Placed {
         toggle = try c.decodeIfPresent(Bool.self, forKey: .toggle) ?? false
     }
 
-    /// The chosen colour, else the face buttons' usual colours, else white.
-    var uiColor: UIColor { color.flatMap(UIColor.init(hex:)) ?? Self.faceColors[control] ?? .white }
+    /// The button's own colour, else the theme's.
+    func uiColor(_ theme: Profile.Theme) -> UIColor {
+        color.flatMap(UIColor.init(hex:)) ?? theme.color(for: control)
+    }
+}
 
-    static let faceColors: [Control: UIColor] = [
-        .a: UIColor(red: 0.30, green: 0.85, blue: 0.45, alpha: 1), .b: UIColor(red: 1, green: 0.33, blue: 0.30, alpha: 1),
-        .x: UIColor(red: 0.25, green: 0.6, blue: 1, alpha: 1), .y: UIColor(red: 1, green: 0.82, blue: 0.2, alpha: 1),
-    ]
+extension Profile {
+    /// Background and default colours of the pad; a button's own colour still wins.
+    enum Theme: String, Codable, CaseIterable {
+        case midnight, black, neon, sunset, mono
+
+        var title: String {
+            switch self {
+            case .midnight: "Midnight"
+            case .black: "Black (saves battery)"
+            case .neon: "Neon"
+            case .sunset: "Sunset"
+            case .mono: "Mono"
+            }
+        }
+
+        var background: UIColor {
+            switch self {
+            case .midnight: UIColor(hex: "#090A0E")!
+            case .black, .mono: .black
+            case .neon: UIColor(hex: "#0C0618")!
+            case .sunset: UIColor(hex: "#160A08")!
+            }
+        }
+
+        /// Buttons without a colour of their own, and the sticks.
+        var accent: UIColor {
+            switch self {
+            case .midnight, .black, .mono: .white
+            case .neon: UIColor(hex: "#3DF5FF")!
+            case .sunset: UIColor(hex: "#FFB86B")!
+            }
+        }
+
+        var stick: UIColor {
+            switch self {
+            case .neon: UIColor(hex: "#FF4FD8")!
+            case .sunset: UIColor(hex: "#FFD36B")!
+            default: .white
+            }
+        }
+
+        /// A B X Y keep their usual colours, toned to the theme; Mono leaves them plain.
+        func color(for control: Control) -> UIColor {
+            let face: [Control: String]
+            switch self {
+            case .mono: face = [:]
+            case .neon: face = [.a: "#39FF88", .b: "#FF3D6E", .x: "#3D8BFF", .y: "#FFF03D"]
+            case .sunset: face = [.a: "#9BE15D", .b: "#FF5E3A", .x: "#5EC8FF", .y: "#FFC93D"]
+            default: face = [.a: "#4DD973", .b: "#FF544D", .x: "#4099FF", .y: "#FFD133"]
+            }
+            return face[control].flatMap(UIColor.init(hex:)) ?? accent
+        }
+    }
 }
 
 extension UIColor {
