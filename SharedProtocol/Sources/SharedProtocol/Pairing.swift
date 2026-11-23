@@ -42,6 +42,26 @@ public enum Pong {
     }
 }
 
+/// Mac → phone game vibration: version, "R", heavy (low-frequency) motor, light (high-frequency) motor, truncated HMAC.
+/// The Mac repeats it while the motors run; the phone stops on its own when the repeats stop.
+// shortcut: no seq, so a LAN replay can buzz the phone once; harmless, add one if it ever matters.
+public enum Rumble {
+    public static let size = 1 + 1 + 2 + 8
+    private static let kind: UInt8 = 0x52
+
+    public static func sealed(low: UInt8, high: UInt8, key: SymmetricKey) -> [UInt8] {
+        let body: [UInt8] = [protocolVersion, kind, low, high]
+        return body + Array(HMAC<SHA256>.authenticationCode(for: body, using: key)).prefix(8)
+    }
+
+    /// Motor levels 0...255, or nil for anything else (untrusted network input).
+    public static func open<C: Collection>(_ bytes: C, key: SymmetricKey) -> (low: UInt8, high: UInt8)? where C.Element == UInt8 {
+        let b = Array(bytes)
+        guard b.count == size, b[0] == protocolVersion, b[1] == kind, tagMatches(b, bodyCount: 4, key: key) else { return nil }
+        return (b[2], b[3])
+    }
+}
+
 /// `b` = body + first 8 bytes of HMAC-SHA256(body). Constant-time, so timing doesn't leak how many tag bytes matched.
 func tagMatches(_ b: [UInt8], bodyCount: Int, key: SymmetricKey) -> Bool {
     let expected = Array(HMAC<SHA256>.authenticationCode(for: b[..<bodyCount], using: key)).prefix(8)

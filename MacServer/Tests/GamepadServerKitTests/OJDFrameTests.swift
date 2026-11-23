@@ -16,6 +16,20 @@ final class OJDFrameTests: XCTestCase {
         _ = backend
     }
 
+    func testRumbleLines() {
+        func parse(_ s: String) -> (low: UInt8, high: UInt8, milliseconds: Int?)? { OJDBackend.rumble(fromLine: Data(s.utf8)) }
+        let set = parse(#"{"apiVersion":"openjoystickdriver/v1alpha3","kind":"RumbleCommand","type":"SetRumble","intensities":{"lowFrequency":65535,"highFrequency":257},"durationMilliseconds":120}"#)
+        XCTAssertEqual(set?.low, 255)
+        XCTAssertEqual(set?.high, 1)
+        XCTAssertEqual(set?.milliseconds, 120)
+        let stop = parse(#"{"apiVersion":"openjoystickdriver/v1alpha3","kind":"RumbleCommand","type":"StopRumble"}"#)
+        XCTAssertEqual(stop?.low, 0)
+        XCTAssertNil(stop?.milliseconds)
+        XCTAssertEqual(parse(#"{"type":"SetRumble","intensities":{"lowFrequency":99999999}}"#)?.low, 255, "clamped")
+        XCTAssertNil(parse(#"{"type":"SetPlayerIndex"}"#))
+        XCTAssertNil(parse("not json"))
+    }
+
     func testNeutralFrame() {
         XCTAssertEqual(OJDBackend.frame(for: GamepadPacket()),
                        #"{"buttons":[],"dpad":[],"axes":{"LeftStickX":0.0000,"LeftStickY":-0.0000,"RightStickX":0.0000,"RightStickY":-0.0000,"LeftTrigger":0.0000,"RightTrigger":0.0000}}"#)

@@ -9,6 +9,8 @@ final class UDPClient {
     var onProblem: ((String?) -> Void)?
     /// Round trip in ms from the Mac's acknowledgements; nil when it stops answering (main thread).
     var onPing: ((Double?) -> Void)?
+    /// A game's vibration: heavy and light motor levels (main thread).
+    var onRumble: ((UInt8, UInt8) -> Void)?
     /// The game profile's keyboard keys; resent every second so a restarted Mac app gets them too.
     var keyMap: KeyMap? {
         didSet { if keyMap != oldValue { sendKeyMap() } }
@@ -92,7 +94,13 @@ final class UDPClient {
         c.receiveMessage { [weak self] data, _, _, error in
             DispatchQueue.main.async {
                 guard let self, c === self.connection else { return }
-                if let data, let key = self.key, let seq = Pong.open(data, key: key) { self.pong(seq) }
+                if let data, let key = self.key {
+                    if let seq = Pong.open(data, key: key) {
+                        self.pong(seq)
+                    } else if let motors = Rumble.open(data, key: key) {
+                        self.onRumble?(motors.low, motors.high)
+                    }
+                }
                 if error == nil { self.receivePongs(on: c) }
             }
         }

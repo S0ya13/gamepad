@@ -12,6 +12,7 @@ final class GamepadViewController: UIViewController {
     private var connected: Pairing?
     private var observation: AnyCancellable?
     private let motion = CMMotionManager()
+    private let rumble = RumblePlayer()
 
     override func loadView() { view = pad }
 
@@ -48,6 +49,9 @@ final class GamepadViewController: UIViewController {
         pad.onChange = { [udp] packet in udp.send(packet) }
         udp.onPing = { [store] in store.ping = $0 }
         udp.onProblem = { [store] in store.problem = $0 }
+        udp.onRumble = { [store, rumble] low, high in
+            if store.settings.haptics { rumble.play(low: low, high: high) }
+        }
         NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil,
                                                queue: .main) { [udp] _ in udp.resume() }
         // objectWillChange fires before the new value is stored, so read the store on the next turn.

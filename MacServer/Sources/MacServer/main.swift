@@ -67,10 +67,13 @@ if !debug && ojdProfile == nil && !CGEventBackend.hasAccessibility(prompt: true)
     exit(1)
 }
 
+var rumbleTarget: GamepadServer?  // the backend exists before the server it reports to
 let backend: InputBackend = debug ? DebugBackend()
-    : ojdProfile.map { OJDBackend(profile: $0) { message in print("\n" + message); exit(1) } }
+    : ojdProfile.map { OJDBackend(profile: $0, onFailure: { message in print("\n" + message); exit(1) },
+                                  onRumble: { rumbleTarget?.rumble(low: $0, high: $1) }) }
     ?? CGEventBackend(sensitivity: sensitivity)
 let server = GamepadServer(pairing: pairing, backend: backend)
+rumbleTarget = server
 server.onClient = { client in if let client { print("\nclient: \(client)") } }
 server.onRejected = { print("\nignoring \($0): not paired with this Mac or an old app version (run with --pair)") }
 

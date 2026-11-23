@@ -44,6 +44,19 @@ final class PairingTests: XCTestCase {
         XCTAssertTrue(json.contains(#""a":"Space""#), json)
     }
 
+    func testRumble() {
+        let wire = Rumble.sealed(low: 200, high: 7, key: key)
+        XCTAssertEqual(wire.count, Rumble.size)
+        XCTAssertEqual(Rumble.open(wire, key: key)?.low, 200)
+        XCTAssertEqual(Rumble.open(wire, key: key)?.high, 7)
+        for i in wire.indices {
+            var bad = wire
+            bad[i] ^= 0x01
+            XCTAssertNil(Rumble.open(bad, key: key), "flipped byte \(i)")
+        }
+        XCTAssertNil(Rumble.open(Pong.sealed(seq: 1, key: key), key: key), "a pong is not a rumble")
+    }
+
     func testPong() {
         let wire = Pong.sealed(seq: 0xDEADBEEF, key: key)
         XCTAssertEqual(wire.count, 14)

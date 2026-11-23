@@ -103,10 +103,11 @@ final class AppModel: ObservableObject {
     private func makeBackend() -> InputBackend {
         problem = nil
         let onFailure: (String) -> Void = { [weak self] message in self?.problem = message }
+        let onRumble: (UInt8, UInt8) -> Void = { [weak self] low, high in self?.server?.rumble(low: low, high: high) }
         switch mode {
         case .keyboard: return CGEventBackend(sensitivity: sensitivity)
-        case .gamepadSDL: return OJDBackend(profile: "sdl-compatible", onFailure: onFailure)
-        case .gamepadGC: return OJDBackend(profile: "game-controller-compatible", onFailure: onFailure)
+        case .gamepadSDL: return OJDBackend(profile: "sdl-compatible", onFailure: onFailure, onRumble: onRumble)
+        case .gamepadGC: return OJDBackend(profile: "game-controller-compatible", onFailure: onFailure, onRumble: onRumble)
         }
     }
 }

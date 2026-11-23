@@ -59,8 +59,12 @@ struct SettingsView: View {
                     slider("Dead zone", value: $store.settings.deadZone, in: 0...0.3, label: percent(store.settings.deadZone))
                     slider("L3 at", value: $store.settings.l3Threshold, in: 0.6...0.98, label: percent(store.settings.l3Threshold))
                 }
-                Section("Feedback") {
+                Section {
                     Toggle("Vibration", isOn: $store.settings.haptics)
+                } header: {
+                    Text("Feedback")
+                } footer: {
+                    Text("Button taps, and the game's own rumble in the Mac's gamepad modes.")
                 }
             }
             .navigationTitle("Settings")

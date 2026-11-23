@@ -5,6 +5,7 @@ iPhone → Mac gamepad over UDP (LAN). Packet format: `SharedProtocol/Sources/Sh
 ## Mac menu bar app
 
 ```sh
+scripts/make_signing_cert.sh # once: a local signing identity, so the key-press permission survives reinstalls
 scripts/install_mac_app.sh   # builds, installs /Applications/Gamepad.app and starts it
 ```
 
@@ -49,6 +50,8 @@ swift run -c release MacServer --ojd gc    # games using Apple GameController
 ```
 
 A/B/X/Y → South/East/West/North, LB/RB → shoulders, LT/RT → analog triggers, Start/Back, L3/R3 → stick clicks.
+The game's rumble goes back to the phone's Taptic Engine (heavy motor → strength, light motor → sharpness);
+the phone's *Vibration* switch turns it off.
 
 ## iOS client
 

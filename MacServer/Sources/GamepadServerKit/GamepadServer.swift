@@ -29,10 +29,13 @@ public final class GamepadServer {
     private var lastPongAt: UInt64 = 0
     private var released = true
     private var keyMap: KeyMap?
+    private var motors: (low: UInt8, high: UInt8) = (0, 0)
+    private var lastRumbleAt: UInt64 = 0
     private let watchdog = DispatchSource.makeTimerSource(queue: .main)
 
     private static let silenceLimit: UInt64 = 250_000_000  // 5 missed heartbeats
     private static let pongInterval: UInt64 = 200_000_000
+    private static let rumbleRepeat: UInt64 = 90_000_000  // every second 50 ms tick; the phone stops on its own after 300 ms without one
 
     public init(pairing: Pairing, backend: InputBackend) {
         self.pairing = pairing
@@ -117,6 +120,18 @@ public final class GamepadServer {
         }
     }
 
+    /// Game vibration for the playing phone. Repeated while the motors run, because UDP may drop any one message.
+    public func rumble(low: UInt8, high: UInt8) {
+        motors = (low, high)
+        sendRumble()
+    }
+
+    private func sendRumble() {
+        guard let active else { return }
+        lastRumbleAt = DispatchTime.now().uptimeNanoseconds
+        active.send(content: Data(Rumble.sealed(low: motors.low, high: motors.high, key: key)), completion: .idempotent)
+    }
+
     /// The phone repeats its mapping every second; only the playing phone's counts.
     private func handle(_ map: KeyMap, from conn: NWConnection) {
         guard conn === active, map != keyMap else { return }
@@ -125,12 +140,15 @@ public final class GamepadServer {
     }
 
     private func checkSilence() {
-        if !released && DispatchTime.now().uptimeNanoseconds - lastPacketAt > Self.silenceLimit { release() }
+        let now = DispatchTime.now().uptimeNanoseconds
+        if !released && now - lastPacketAt > Self.silenceLimit { release() }
+        if motors != (0, 0) && now - lastRumbleAt >= Self.rumbleRepeat { sendRumble() }
     }
 
     private func release() {
         guard !released else { return }
         backend.reset()
+        motors = (0, 0)
         released = true
         onClient?(nil)
     }
