@@ -56,8 +56,19 @@ fi
 [[ -f "$PROVISION_PATH" ]] || die "PROVISION_PATH is not a file: '$PROVISION_PATH'"
 command -v zsign >/dev/null || die "zsign not found (brew install zsign)"
 
+# An explicit (non-wildcard) profile only installs if the bundle id matches it, so take it from the profile.
+# shortcut: partial wildcards like TEAM.com.foo.* keep the project bundle id; set it in project.yml for those.
+APP_ID="$(security cms -D -i "$PROVISION_PATH" 2>/dev/null | plutil -extract Entitlements.application-identifier raw -o - -)" \
+  || die "cannot read application-identifier from $PROVISION_PATH"
+BUNDLE_ARGS=()
+if [[ "$APP_ID" != *"*"* ]]; then
+  BUNDLE_ARGS=(-b "${APP_ID#*.}")
+  echo "bundle id from profile: ${APP_ID#*.}"
+fi
+
 rm -f "$SIGNED"
-zsign -q -k "$P12_PATH" -p "$P12_PASSWORD" -m "$PROVISION_PATH" -o "$SIGNED" "$UNSIGNED"
+zsign -q -k "$P12_PATH" -p "$P12_PASSWORD" -m "$PROVISION_PATH" ${BUNDLE_ARGS[@]+"${BUNDLE_ARGS[@]}"} \
+  -o "$SIGNED" "$UNSIGNED"
 [[ -f "$SIGNED" ]] || die "zsign did not produce $SIGNED"
 echo "signed:   $SIGNED"
 
