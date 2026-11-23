@@ -92,7 +92,7 @@ drag to move, drag the round handle to resize; positions snap to 1/40 of the scr
 label, shape (square, rounded, circle), colour, and *Stays pressed* (tap to hold, tap again to let go).
 Empty space is the sticks: left half left stick, right half right stick. Each stick has a resting spot
 (drag it in the editor, drawn faint on the pad) and a mode: *Fixed* (the base stays put; touches within two
-radii of it count), *Floating* (the base appears under the finger) or *Follows finger* (floating, and the
+radii of it count), *Floating* (the base appears under the finger) or *Follows finger*, the default (floating, and the
 base is dragged along when the finger runs past the ring). LT/RT are analog like a pedal: the lower
 the finger in the trigger, the harder the pull (a touch at the top is a quarter). Pushing the left stick past
 88% of its radius (adjustable) holds L3 (sprint). *Duplicate* makes a profile for a new game.

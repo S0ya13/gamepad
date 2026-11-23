@@ -4,7 +4,7 @@ import SharedProtocol
 /// Settings, paired Macs and link state, shared by the gamepad screen and the settings screen. Main thread only.
 final class ClientStore: ObservableObject {
     struct Settings: Codable, Equatable {
-        var stickRadius = 70.0
+        var stickRadius = 55.0
         var deadZone = 0.05
         var l3Threshold = 0.88
         var haptics = true

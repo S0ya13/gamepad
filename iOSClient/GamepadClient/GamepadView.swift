@@ -155,7 +155,8 @@ final class GamepadView: UIView {
         ctx.setLineWidth(2)
         ctx.strokeEllipse(in: base.insetBy(dx: 1, dy: 1))
 
-        let k = CGRect(x: knob.x - 26, y: knob.y - 26, width: 52, height: 52)
+        let kr = max(18, r * 0.4)  // knob scales with the base, so a small stick still looks balanced
+        let k = CGRect(x: knob.x - kr, y: knob.y - kr, width: kr * 2, height: kr * 2)
         ctx.saveGState()
         if active { ctx.setShadow(offset: .zero, blur: 16, color: color.withAlphaComponent(0.6).cgColor) }
         color.withAlphaComponent(active ? 0.92 : 0.2).setFill()
@@ -164,7 +165,7 @@ final class GamepadView: UIView {
         // Grip ring on the knob.
         UIColor(white: 0, alpha: active ? 0.18 : 0.3).setStroke()
         ctx.setLineWidth(1.5)
-        ctx.strokeEllipse(in: k.insetBy(dx: 8, dy: 8))
+        ctx.strokeEllipse(in: k.insetBy(dx: kr * 0.3, dy: kr * 0.3))
     }
 
     /// The control's outline; the whole rectangle still takes touches, so a circle is easy to hit.

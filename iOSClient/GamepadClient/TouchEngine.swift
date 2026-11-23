@@ -20,7 +20,7 @@ final class TouchEngine {
     }
     var leftSetup = Profile.StickSetup.left
     var rightSetup = Profile.StickSetup.right
-    var stickRadius: CGFloat = 70
+    var stickRadius: CGFloat = 55
     /// Deflection (0...1) below which the stick reads 0; the rest is rescaled so full deflection still gives 1.
     var deadZone: CGFloat = 0
     /// Left-stick deflection (0...1) that holds L3.

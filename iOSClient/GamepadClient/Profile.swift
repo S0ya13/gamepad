@@ -35,7 +35,7 @@ struct Profile: Codable, Equatable, Identifiable {
             case dynamic
         }
 
-        var mode = Mode.floating
+        var mode = Mode.dynamic
         /// Resting spot in 0...1 of the screen, kept in the stick's half.
         var center: CGPoint
 

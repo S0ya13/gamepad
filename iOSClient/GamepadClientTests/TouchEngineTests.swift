@@ -213,7 +213,7 @@ final class TouchEngineTests: XCTestCase {
         XCTAssertEqual(p.controls.first?.shape, .square)
         XCTAssertNil(p.controls.first?.label)
         XCTAssertEqual(p.leftStick, .left)
-        XCTAssertEqual(p.rightStick.mode, .floating)
+        XCTAssertEqual(p.rightStick.mode, .dynamic, "sticks follow the finger by default")
     }
 
     func testHexColorRoundTrip() {
