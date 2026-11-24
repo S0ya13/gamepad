@@ -23,6 +23,9 @@ public final class OJDBackend: InputBackend {
     private var lastWrite: UInt64 = 0
     private var stopping = false
     private var rumbleGeneration = 0
+    // Once a second while the phone sends: what reached ojd. Read with `log stream --level debug --predicate 'subsystem == "com.gamepad.mac"'`.
+    private var stats = (applied: 0, written: 0, skipped: 0, rumbles: 0, since: UInt64(0))
+    private static let log = Logger(subsystem: "com.gamepad.mac", category: "ojd")
     private let onFailure: (String) -> Void
     private let onRecovered: () -> Void
     private let onRumble: (UInt8, UInt8) -> Void
@@ -86,8 +89,7 @@ public final class OJDBackend: InputBackend {
             DispatchQueue.main.async {
                 // No self: the backend was released (mode switch, quit) and deinit killed ojd on purpose.
                 guard let self, !self.stopping, self.process === p else { return }
-                Logger(subsystem: "com.gamepad.mac", category: "ojd")
-                    .error("ojd virtual feed exited (\(p.terminationStatus, privacy: .public)): \(reason, privacy: .public)")
+                Self.log.error("ojd virtual feed exited (\(p.terminationStatus, privacy: .public)): \(reason, privacy: .public)")
                 self.onFailure("ojd virtual feed exited (\(p.terminationStatus)): \(reason) Restarting it…")
                 DispatchQueue.main.asyncAfter(deadline: .now() + Self.restartDelay) { [weak self] in
                     self?.launch(restart: true)
@@ -121,7 +123,21 @@ public final class OJDBackend: InputBackend {
     /// The feed's process while it runs; tests kill it to check the restart.
     var runningPID: pid_t? { process?.isRunning == true ? process?.processIdentifier : nil }
 
-    public func apply(_ packet: GamepadPacket) { write(Self.frame(for: packet)) }
+    public func apply(_ packet: GamepadPacket) {
+        stats.applied += 1
+        let now = DispatchTime.now().uptimeNanoseconds
+        if now - stats.since >= 1_000_000_000 {
+            if stats.since > 0 {
+                Self.log.debug("""
+                    packets \(self.stats.applied, privacy: .public) written \(self.stats.written, privacy: .public) \
+                    skipped \(self.stats.skipped, privacy: .public) rumbles \(self.stats.rumbles, privacy: .public) \
+                    lx \(packet.lx, privacy: .public) buttons \(packet.buttons.rawValue, privacy: .public)
+                    """)
+            }
+            stats = (0, 0, 0, 0, now)
+        }
+        write(Self.frame(for: packet))
+    }
 
     public func reset() { write("{}") }
 
@@ -133,13 +149,15 @@ public final class OJDBackend: InputBackend {
         // A line is under PIPE_BUF (512 bytes), so a non-blocking write puts all of it in the pipe or none.
         // None: ojd is behind; the next packet or heartbeat (50 ms) tries again.
         let written = bytes.withUnsafeBytes { Darwin.write(input.fileHandleForWriting.fileDescriptor, $0.baseAddress, $0.count) }
-        guard written == bytes.count else { return }
+        guard written == bytes.count else { stats.skipped += 1; return }
+        stats.written += 1
         lastLine = line
         lastWrite = now
     }
 
     /// A timed rumble stops by itself; a newer command cancels the pending stop.
     private func rumble(_ r: (low: UInt8, high: UInt8, milliseconds: Int?)) {
+        stats.rumbles += 1
         rumbleGeneration += 1
         let generation = rumbleGeneration
         onRumble(r.low, r.high)
