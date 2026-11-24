@@ -58,7 +58,9 @@ public final class OJDBackend: InputBackend {
         }
         let process = Process(), input = Pipe(), output = Pipe(), errors = Pipe()
         process.executableURL = URL(fileURLWithPath: ojd)  // a link named "ojd": the app runs as its CLI by argv[0]
-        process.arguments = ["--no-input", "virtual", "feed", "--as", profile]
+        // The default 0.5 s per service request is too short while a game streams: the service answers late and
+        // the feed quits, so the pad reconnects over and over. A late answer only delays the frames.
+        process.arguments = ["--no-input", "--timeout", "10", "virtual", "feed", "--as", profile]
         process.standardInput = input
         process.standardOutput = output  // games' output commands, one JSON object per line
         process.standardError = errors
