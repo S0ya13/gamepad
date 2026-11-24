@@ -16,6 +16,31 @@ final class OJDFrameTests: XCTestCase {
         _ = backend
     }
 
+    /// OJD closes a feed when it can't deliver a frame (a GeForce NOW game starting); the pad must come back by itself.
+    func testExitedFeedRestarts() throws {
+        try XCTSkipIf(OJDBackend.ojdPath() == nil, "ojd not installed")
+        OJDBackend.restartDelay = 0.2
+        defer { OJDBackend.restartDelay = 1 }
+        var failure: String?
+        var recovered = false
+        let backend = OJDBackend(profile: "generic", onFailure: { failure = $0 }, onRecovered: { recovered = true })
+        RunLoop.main.run(until: Date() + 0.5)
+        let first = try XCTUnwrap(backend.runningPID, "ojd didn't start")
+        kill(first, SIGKILL)
+        RunLoop.main.run(until: Date() + 1.5)
+        XCTAssertNotNil(failure)
+        XCTAssertTrue(recovered)
+        XCTAssertNotNil(backend.runningPID)
+        XCTAssertNotEqual(backend.runningPID, first)
+    }
+
+    /// The pipe is non-blocking; only a write under PIPE_BUF is all-or-nothing, so a frame never arrives cut in half.
+    func testLongestFrameFitsOneAtomicWrite() {
+        let all = GamepadPacket(buttons: GamepadPacket.Buttons(rawValue: .max),
+                                lx: .min, ly: .min, rx: .min, ry: .min, lt: 255, rt: 255)
+        XCTAssertLessThan(OJDBackend.frame(for: all).utf8.count + 1, Int(PIPE_BUF))
+    }
+
     func testRumbleLines() {
         func parse(_ s: String) -> (low: UInt8, high: UInt8, milliseconds: Int?)? { OJDBackend.rumble(fromLine: Data(s.utf8)) }
         let set = parse(#"{"apiVersion":"openjoystickdriver/v1alpha3","kind":"RumbleCommand","type":"SetRumble","intensities":{"lowFrequency":65535,"highFrequency":257},"durationMilliseconds":120}"#)

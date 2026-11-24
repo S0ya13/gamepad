@@ -36,6 +36,10 @@ final class AppModel: ObservableObject {
     }
 
     private var server: GamepadServer?
+    // A menu bar app without windows gets App Nap, which delays its timers and network handling
+    // while a fullscreen game runs; input must reach the game at once.
+    private let activity = ProcessInfo.processInfo.beginActivity(
+        options: [.userInitiatedAllowingIdleSystemSleep, .latencyCritical], reason: "Relays the phone's gamepad input")
 
     init() {
         mode = UserDefaults.standard.string(forKey: "mode").flatMap(Mode.init) ?? .keyboard
@@ -109,11 +113,14 @@ final class AppModel: ObservableObject {
     private func makeBackend() -> InputBackend {
         problem = nil
         let onFailure: (String) -> Void = { [weak self] message in self?.problem = message }
+        let onRecovered: () -> Void = { [weak self] in self?.problem = nil }
         let onRumble: (UInt8, UInt8) -> Void = { [weak self] low, high in self?.server?.rumble(low: low, high: high) }
         switch mode {
         case .keyboard: return CGEventBackend(sensitivity: sensitivity)
-        case .gamepadSDL: return OJDBackend(profile: "sdl-compatible", onFailure: onFailure, onRumble: onRumble)
-        case .gamepadGC: return OJDBackend(profile: "game-controller-compatible", onFailure: onFailure, onRumble: onRumble)
+        case .gamepadSDL:
+            return OJDBackend(profile: "sdl-compatible", onFailure: onFailure, onRecovered: onRecovered, onRumble: onRumble)
+        case .gamepadGC:
+            return OJDBackend(profile: "game-controller-compatible", onFailure: onFailure, onRecovered: onRecovered, onRumble: onRumble)
         }
     }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import os
 import SharedProtocol
 
 /// Real analog gamepad for games: pipes the state into OpenJoystickDriver's `ojd virtual feed`,
@@ -15,35 +16,60 @@ public final class OJDBackend: InputBackend {
         (.dpadUp, "DpadUp"), (.dpadDown, "DpadDown"), (.dpadLeft, "DpadLeft"), (.dpadRight, "DpadRight"),
     ]
 
-    private let process = Process()
-    private let stdin = Pipe()
-    private let stdout = Pipe()
+    private let profile: String
+    private var process: Process?
+    private var input: Pipe?
     private var lastLine = ""
     private var lastWrite: UInt64 = 0
     private var stopping = false
     private var rumbleGeneration = 0
+    private let onFailure: (String) -> Void
+    private let onRecovered: () -> Void
     private let onRumble: (UInt8, UInt8) -> Void
 
     /// OJD hands back game output only when it gets input; resend the held state at least this often.
     private static let feedbackInterval: UInt64 = 40_000_000
+    /// OJD closes a feed whose frame it couldn't deliver (seen when a GeForce NOW game starts); start a new one after this.
+    static var restartDelay: TimeInterval = 1
 
-    /// `onFailure` runs on the main queue when `ojd` can't start or exits on its own.
+    /// `onFailure` runs on the main queue when `ojd` can't start or exits on its own; a feed that exits is
+    /// started again, and `onRecovered` runs once the new one is up.
     /// `onRumble` gets the game's motor levels (heavy, light; 0...255) on the main queue.
-    public init(profile: String, onFailure: @escaping (String) -> Void,
+    public init(profile: String, onFailure: @escaping (String) -> Void, onRecovered: @escaping () -> Void = {},
                 onRumble: @escaping (UInt8, UInt8) -> Void = { _, _ in }) {
+        self.profile = profile
+        self.onFailure = onFailure
+        self.onRecovered = onRecovered
         self.onRumble = onRumble
         signal(SIGPIPE, SIG_IGN)  // a dead ojd must not kill us mid-write; terminationHandler reports it
+        launch(restart: false)
+    }
+
+    deinit {
+        stopping = true
+        if process?.isRunning == true { process?.terminate() }  // removes the virtual gamepad
+    }
+
+    private func launch(restart: Bool) {
+        guard !stopping else { return }
         guard let ojd = Self.ojdPath() else {
-            DispatchQueue.main.async { onFailure("ojd not found. Install OpenJoystickDriver and link its CLI as 'ojd' (Settings → Advanced → Install Command-Line Tool).") }
+            DispatchQueue.main.async { [onFailure] in onFailure("ojd not found. Install OpenJoystickDriver and link its CLI as 'ojd' (Settings → Advanced → Install Command-Line Tool).") }
             return
         }
+        let process = Process(), input = Pipe(), output = Pipe(), errors = Pipe()
         process.executableURL = URL(fileURLWithPath: ojd)  // a link named "ojd": the app runs as its CLI by argv[0]
         process.arguments = ["--no-input", "virtual", "feed", "--as", profile]
-        process.standardInput = stdin
-        process.standardOutput = stdout  // games' output commands, one JSON object per line
+        process.standardInput = input
+        process.standardOutput = output  // games' output commands, one JSON object per line
+        process.standardError = errors
+        // A stalled ojd stops reading; a blocking write would then freeze the main queue and with it the UDP replies.
+        _ = fcntl(input.fileHandleForWriting.fileDescriptor, F_SETFL, O_NONBLOCK)
         var pending = Data()
-        stdout.fileHandleForReading.readabilityHandler = { [weak self] handle in
-            pending.append(handle.availableData)
+        output.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            let data = handle.availableData
+            // End of file: without this the handler fires nonstop and burns a core.
+            guard !data.isEmpty else { handle.readabilityHandler = nil; return }
+            pending.append(data)
             while let newline = pending.firstIndex(of: 0x0A) {
                 let line = pending[pending.startIndex ..< newline]
                 pending = Data(pending[(newline + 1)...])
@@ -52,23 +78,35 @@ public final class OJDBackend: InputBackend {
             }
         }
         process.terminationHandler = { [weak self] p in
+            // ojd has exited, so its stderr ends here; it holds the reason, such as "The service closed the virtual gamepad".
+            let reason = String(decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+                .split(whereSeparator: \.isNewline).last.map(String.init) ?? "no message"
             DispatchQueue.main.async {
                 // No self: the backend was released (mode switch, quit) and deinit killed ojd on purpose.
-                guard let self, !self.stopping else { return }
-                onFailure("ojd virtual feed exited (\(p.terminationStatus)). Is OpenJoystickDriver running, with Input Monitoring allowed? Try: ojd status")
+                guard let self, !self.stopping, self.process === p else { return }
+                Logger(subsystem: "com.gamepad.mac", category: "ojd")
+                    .error("ojd virtual feed exited (\(p.terminationStatus, privacy: .public)): \(reason, privacy: .public)")
+                self.onFailure("ojd virtual feed exited (\(p.terminationStatus)): \(reason) Restarting it…")
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.restartDelay) { [weak self] in
+                    self?.launch(restart: true)
+                }
             }
         }
         do {
             try process.run()
+            self.process = process
+            self.input = input
+            lastLine = ""  // the new feed starts neutral; send the held state again
+            // Recovered only if it stays up: an ojd that exits at once (service stopped) would make the error blink.
+            if restart {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2 * Self.restartDelay) { [weak self, weak process] in
+                    guard let self, let process, self.process === process, process.isRunning else { return }
+                    self.onRecovered()
+                }
+            }
         } catch {
-            DispatchQueue.main.async { onFailure("Cannot start ojd: \(error). Install OpenJoystickDriver and link its CLI as 'ojd' on PATH.") }
+            DispatchQueue.main.async { [onFailure] in onFailure("Cannot start ojd: \(error). Install OpenJoystickDriver and link its CLI as 'ojd' on PATH.") }
         }
-    }
-
-    deinit {
-        stdout.fileHandleForReading.readabilityHandler = nil
-        stopping = true
-        if process.isRunning { process.terminate() }  // removes the virtual gamepad
     }
 
     /// An app started from Finder has a minimal PATH, so also look where OJD and users put the link.
@@ -78,17 +116,24 @@ public final class OJDBackend: InputBackend {
         return dirs.map { $0 + "/ojd" }.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
+    /// The feed's process while it runs; tests kill it to check the restart.
+    var runningPID: pid_t? { process?.isRunning == true ? process?.processIdentifier : nil }
+
     public func apply(_ packet: GamepadPacket) { write(Self.frame(for: packet)) }
 
     public func reset() { write("{}") }
 
     private func write(_ line: String) {
-        // Not running: nobody drains the pipe, and a full pipe would block the main thread.
         let now = DispatchTime.now().uptimeNanoseconds
-        guard process.isRunning, line != lastLine || now - lastWrite > Self.feedbackInterval else { return }
+        guard let process, process.isRunning, let input,
+              line != lastLine || now - lastWrite > Self.feedbackInterval else { return }
+        let bytes = Array((line + "\n").utf8)
+        // A line is under PIPE_BUF (512 bytes), so a non-blocking write puts all of it in the pipe or none.
+        // None: ojd is behind; the next packet or heartbeat (50 ms) tries again.
+        let written = bytes.withUnsafeBytes { Darwin.write(input.fileHandleForWriting.fileDescriptor, $0.baseAddress, $0.count) }
+        guard written == bytes.count else { return }
         lastLine = line
         lastWrite = now
-        try? stdin.fileHandleForWriting.write(contentsOf: Data((line + "\n").utf8))
     }
 
     /// A timed rumble stops by itself; a newer command cancels the pending stop.
