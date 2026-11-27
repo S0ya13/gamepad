@@ -3,12 +3,18 @@ import XCTest
 @testable import GamepadServerKit
 
 final class OJDFrameTests: XCTestCase {
+    /// E2004: ojd is installed but its service isn't running, so there is nothing to test against.
+    private func skipIfServiceStopped(_ failure: String?) throws {
+        try XCTSkipIf(failure?.contains("E2004") == true, "OJD service not running ('ojd service start')")
+    }
+
     /// Switching modes releases the backend; ojd killed on purpose must not show up as an error.
     func testReleasingBackendIsNotAFailure() throws {
         try XCTSkipIf(OJDBackend.ojdPath() == nil, "ojd not installed")
         var failure: String?
         var backend: OJDBackend? = OJDBackend(profile: "generic") { failure = $0 }
         RunLoop.main.run(until: Date() + 0.3)
+        try skipIfServiceStopped(failure)
         XCTAssertNil(failure, "ojd didn't start")
         backend = nil
         RunLoop.main.run(until: Date() + 0.5)
@@ -25,6 +31,7 @@ final class OJDFrameTests: XCTestCase {
         var recovered = false
         let backend = OJDBackend(profile: "generic", onFailure: { failure = $0 }, onRecovered: { recovered = true })
         RunLoop.main.run(until: Date() + 0.5)
+        try skipIfServiceStopped(failure)
         let first = try XCTUnwrap(backend.runningPID, "ojd didn't start")
         kill(first, SIGKILL)
         RunLoop.main.run(until: Date() + 1.5)
